@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block content %}
+<div class="page"><div class="heading"><div><div class="eyebrow">FACULTY PORTAL</div><h1>Attendance Control Cabin</h1><p>Create short-lived QR sessions tied to your current location.</p></div><button class="btn" onclick="getLocation()">Capture faculty GPS</button></div>
+<section class="card"><h2>Create QR attendance session</h2><form method="post" action="{{ url_for('create_session') }}" onsubmit="return facultySession(event)">
+<select name="course_id" required>{% for c in courses %}<option value="{{ c.id }}">{{ c.code }} — {{ c.name }}</option>{% else %}<option>No courses assigned</option>{% endfor %}</select>
+<input type="hidden" id="flat" name="latitude"><input type="hidden" id="flon" name="longitude">
+<button class="btn primary">Generate 5-minute session</button></form><p id="facultyLoc">Location not captured.</p></section>
+<section class="card"><h2>Recent sessions</h2>{% for s in sessions %}<div class="session"><b>{{ s.course.code }}</b><span>{{ s.token }}</span><small>Expires {{ s.expires_at.strftime('%H:%M:%S') }}</small></div>{% else %}<p>No sessions.</p>{% endfor %}</section>
+</div>
+{% endblock %}

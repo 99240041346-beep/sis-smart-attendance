@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<div class="auth-wrap"><div class="auth-card"><div class="logo3d">{{ "✓" if ok else "!" }}</div><h2>{{ "Attendance accepted" if ok else "Attendance rejected" }}</h2><p>{{ message }}</p><a class="btn primary" href="{{ url_for('student_dashboard') }}">Back to dashboard</a></div></div>{% endblock %}

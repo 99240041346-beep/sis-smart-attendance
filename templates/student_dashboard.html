@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block content %}
+<div class="page"><div class="heading"><div><div class="eyebrow">STUDENT PORTAL</div><h1>{{ user.name }}</h1><p>{{ user.register_number }} • {{ user.student_profile.programme if user.student_profile else 'Student' }}</p></div><button class="btn" onclick="getLocation()">Share location</button></div>
+<div class="grid">
+<div class="statcard"><span>Attendance</span><strong>{{ percentage }}%</strong><small>100 / classes conducted × attended</small></div>
+<div class="statcard"><span>Role</span><strong>Student</strong><small>Verified portal access</small></div>
+<div class="statcard"><span>Security</span><strong>QR + GPS</strong><small>Face verification required</small></div>
+</div>
+<div class="two">
+<section class="card"><h2>Attendance verification</h2><p>Scan the faculty QR. Then allow location and complete the face-verification step.</p>
+<input id="token" placeholder="Paste attendance token">
+<button class="btn primary" onclick="startAttendance()">Verify Attendance</button>
+<div id="verify" class="verify hidden">
+<p id="locStatus">Location: waiting</p>
+<label class="check"><input id="face" type="checkbox"> Face verification completed (development scaffold)</label>
+<button class="btn primary" onclick="submitAttendance()">Complete Attendance</button>
+</div></section>
+<section class="card"><h2>Notifications</h2>{% for n in notices %}<article class="notice"><b>{{ n.title }}</b><p>{{ n.body }}</p></article>{% else %}<p>No notices.</p>{% endfor %}</section>
+</div>
+<section class="card"><h2>Recent attendance</h2><table><tr><th>Course</th><th>Status</th><th>Distance</th><th>Date</th></tr>{% for r in records %}<tr><td>{{ r.session_ref.course.code }} - {{ r.session_ref.course.name }}</td><td>{{ r.status }}</td><td>{{ "%.1f"|format(r.distance_m or 0) }} m</td><td>{{ r.created_at.strftime('%d-%m-%Y %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">No attendance records.</td></tr>{% endfor %}</table></section>
+</div>
+<script>window.role="student";</script>
+{% endblock %}

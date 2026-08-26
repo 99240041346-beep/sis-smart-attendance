@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<div class="auth-wrap"><div class="auth-card"><h2>Profile</h2><form method="post"><input name="name" value="{{ user.name }}" required><input name="email" value="{{ user.email }}" type="email" required><button class="btn primary">Save</button></form><a href="{{ url_for('change_password') }}">Change password</a></div></div>{% endblock %}

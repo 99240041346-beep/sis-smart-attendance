@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block content %}
+<div class="page"><div class="heading"><div><div class="eyebrow">ADMIN PORTAL</div><h1>System Administration</h1><p>Only the permanent SIS administrator should manage accounts and courses.</p></div></div>
+<div class="grid"><div class="statcard"><span>Students</span><strong>{{ students }}</strong></div><div class="statcard"><span>Faculty</span><strong>{{ faculty }}</strong></div><div class="statcard"><span>Courses</span><strong>{{ courses }}</strong></div><div class="statcard"><span>Sessions</span><strong>{{ sessions }}</strong></div></div>
+<div class="two">
+<section class="card"><h2>Create account</h2><form method="post" action="{{ url_for('create_user') }}"><input name="name" placeholder="Full name" required><input name="register_number" placeholder="Register number" required><input type="email" name="email" placeholder="Email" required><input type="password" name="password" placeholder="Temporary password" required><select name="role"><option value="student">Student</option><option value="faculty">Faculty</option></select><button class="btn primary">Create account</button></form></section>
+<section class="card"><h2>Create course</h2><form method="post" action="{{ url_for('create_course') }}"><input name="code" placeholder="Course code" required><input name="name" placeholder="Course name" required><input name="faculty_id" type="number" placeholder="Faculty user ID"><button class="btn primary">Create course</button></form></section>
+</div>
+<section class="card"><h2>Publish notification</h2><form method="post" action="{{ url_for('create_notice') }}"><input name="title" placeholder="Notice title" required><textarea name="body" placeholder="Notice content" required></textarea><button class="btn primary">Publish</button></form></section>
+</div>{% endblock %}

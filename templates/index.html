@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block content %}
+<section class="hero">
+  <div class="orb orb1"></div><div class="orb orb2"></div>
+  <div class="hero-card">
+    <div class="eyebrow">SIS PORTAL</div>
+    <h1>Smart Attendance<br><span>with verified presence.</span></h1>
+    <p>Student, Faculty and Admin portals with QR, location and face-verification workflow.</p>
+    <a class="btn primary" href="{{ url_for('login') }}">Sign in to SIS</a>
+  </div>
+</section>
+{% endblock %}

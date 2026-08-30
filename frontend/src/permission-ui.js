@@ -1,4 +1,4 @@
-const API=(import.meta.env.VITE_API_URL||'http://localhost:4000/api')+'/permissions';
+const API=(import.meta.env.VITE_API_URL||'https://kare-one-api.onrender.com/api').replace(/\/$/,'')+'/permissions';
 const token=()=>localStorage.getItem('kare_token');
 const user=()=>{try{return JSON.parse(localStorage.getItem('kare_user')||'null')}catch{return null}};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -54,6 +54,7 @@ function openUI(){
   const style=document.createElement('style');style.textContent=`
 .permission-fab{position:fixed;right:22px;bottom:22px;z-index:9998;border:0;border-radius:24px;padding:12px 18px;background:#0aa6c2;color:white;font-weight:700;cursor:pointer;box-shadow:0 5px 18px #0004}
 .permission-backdrop{position:fixed;inset:0;z-index:9999;background:#0007;display:flex;align-items:center;justify-content:center;padding:18px}
+.permission-backdrop[hidden]{display:none!important}
 .permission-modal{background:#fff;color:#24343b;width:min(900px,96vw);max-height:90vh;overflow:auto;border-radius:8px;box-shadow:0 20px 70px #0008}
 .permission-modal header{background:#168db1;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
 .permission-modal header strong,.permission-modal header small{display:block}.permission-modal header strong{font-size:17px}.permission-modal header small{margin-top:3px;opacity:.9}

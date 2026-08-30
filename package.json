@@ -1,0 +1,8 @@
+{
+  "name": "kare-one-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "npm --prefix backend install && npm --prefix backend start"
+  }
+}

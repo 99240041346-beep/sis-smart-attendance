@@ -1,4 +1,6 @@
--- KARE ONE production database foundation
+-- KARE ONE unified SIS smart-attendance database
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS app_users (
   id BIGSERIAL PRIMARY KEY,
   register_number VARCHAR(80) UNIQUE,
@@ -9,6 +11,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   department VARCHAR(120),
+  face_template JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -20,10 +23,22 @@ CREATE TABLE IF NOT EXISTS subjects (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS timetable (
+  id BIGSERIAL PRIMARY KEY,
+  subject_id BIGINT REFERENCES subjects(id),
+  faculty_id BIGINT REFERENCES app_users(id),
+  class_name VARCHAR(100) NOT NULL,
+  day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  room VARCHAR(100)
+);
+
 CREATE TABLE IF NOT EXISTS attendance_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   subject_id BIGINT NOT NULL REFERENCES subjects(id),
   faculty_id BIGINT NOT NULL REFERENCES app_users(id),
+  class_name VARCHAR(100),
   qr_token_hash VARCHAR(128) NOT NULL UNIQUE,
   faculty_latitude DOUBLE PRECISION NOT NULL,
   faculty_longitude DOUBLE PRECISION NOT NULL,

@@ -2,7 +2,7 @@
   "name": "kare-one-api",
   "version": "1.0.0",
   "private": true,
-  "scripts": {"start":"node src/server.js","dev":"node --watch src/server.js"},
+  "scripts": {"start":"node src/bootstrap.js","dev":"node --watch src/bootstrap.js"},
   "engines": {"node": ">=20"},
   "dependencies": {
     "bcryptjs":"^2.4.3",

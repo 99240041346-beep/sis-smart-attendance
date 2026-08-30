@@ -10,4 +10,12 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: sis-smart-attendance-db
+          property: connectionString
+
+databases:
+  - name: sis-smart-attendance-db
+    databaseName: sis_attendance
+    user: sis_admin
+    plan: free

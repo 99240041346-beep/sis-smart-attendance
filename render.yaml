@@ -19,8 +19,9 @@ services:
       - key: FRONTEND_URL
         value: https://kare-one-portal.onrender.com
 
-  - type: static
+  - type: web
     name: kare-one-portal
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist

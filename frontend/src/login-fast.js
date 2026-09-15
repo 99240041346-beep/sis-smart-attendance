@@ -1,5 +1,15 @@
 const API=(import.meta.env.VITE_API_URL||'https://kare-one-api.onrender.com/api').replace(/\/$/,'');
 
+// Warm the Render API as soon as the login page loads. The frontend is a static
+// site, so the browser must wake the public API service before authentication.
+function warmApi(){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),60000);
+  fetch(`${API}/health`,{method:'GET',cache:'no-store',signal:controller.signal})
+    .catch(()=>{})
+    .finally(()=>clearTimeout(timeout));
+}
+
 function installFastLogin(){
   const form=document.querySelector('.sis-login form');
   if(!form||form.dataset.fastLoginInstalled==='1')return !!form;
@@ -8,7 +18,7 @@ function installFastLogin(){
   const identityInput=form.querySelector('input:not([type="password"]):not([type="checkbox"])');
   const passwordInput=form.querySelector('input[type="password"]');
   const footer=document.querySelector('.login-foot');
-  if(footer)footer.textContent='KARE-SIS • Fast sign-in • Location is requested only when attendance is marked';
+  if(footer)footer.textContent='KARE-SIS • Fast sign-in • Secure API connection';
 
   form.addEventListener('submit',async event=>{
     event.preventDefault();
@@ -16,7 +26,7 @@ function installFastLogin(){
     const identity=identityInput?.value?.trim()||'';
     const password=passwordInput?.value||'';
     if(!identity||!password)return;
-    if(button){button.disabled=true;button.textContent='CONNECTING…';}
+    if(button){button.disabled=true;button.textContent='CONNECTING TO KARE…';}
     let errorBox=form.querySelector('.error');
     if(!errorBox){errorBox=document.createElement('div');errorBox.className='error';form.insertBefore(errorBox,button);}
     errorBox.textContent='';
@@ -24,7 +34,8 @@ function installFastLogin(){
       const deviceId=localStorage.getItem('kare_device_id')||crypto.randomUUID();
       localStorage.setItem('kare_device_id',deviceId);
       const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),25000);
+      // Render free services can need extra time to wake after being idle.
+      const timeout=setTimeout(()=>controller.abort(),90000);
       let response;
       try{
         response=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:identity,password,deviceId}),signal:controller.signal,cache:'no-store'});
@@ -37,7 +48,7 @@ function installFastLogin(){
       if(button)button.textContent='SIGNED IN ✓';
       window.location.reload();
     }catch(error){
-      const message=error?.name==='AbortError'?'KARE API is taking too long to respond. Please try SIGN IN again.':(error?.message||'Login failed. Please try again.');
+      const message=error?.name==='AbortError'?'KARE API did not respond within 90 seconds. The service may be unavailable. Please try SIGN IN again.':(error?.message||'Login failed. Please try again.');
       errorBox.textContent=message;
       if(button){button.disabled=false;button.textContent='SIGN IN';}
     }
@@ -45,5 +56,6 @@ function installFastLogin(){
   return true;
 }
 
+warmApi();
 const timer=setInterval(()=>{if(installFastLogin())clearInterval(timer)},50);
 setTimeout(()=>clearInterval(timer),15000);

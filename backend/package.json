@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "qr:test": "node src/qr-test-server.js"
   },
   "engines": {
     "node": ">=20"

@@ -31,19 +31,32 @@ async function initDb() {
     await query("ALTER TABLE subjects ADD COLUMN IF NOT EXISTS source_url TEXT");
 
     const seeds = [
-      ['student', 'student', null, 'Demo Student', 'student@kare.edu', 'student', 'Computer Science and Engineering', '1', 'A'],
-      [null, null, 'faculty', 'Demo Faculty', 'faculty@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
+      ['student', 'student', null, 'Demo Student', 'student@kare.edu', 'student', 'Computer Science and Engineering', '1', 'S1'],
+      [null, 'FAC001', 'faculty123', 'Dr. Arjun Kumar', 'faculty1@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
+      [null, 'FAC002', 'faculty123', 'Dr. Priya Nair', 'faculty2@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
+      [null, 'FAC003', 'faculty123', 'Prof. Rahul Varma', 'faculty3@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
+      [null, 'FAC004', 'faculty123', 'Dr. Meena Krishnan', 'faculty4@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
+      [null, 'FAC005', 'faculty123', 'Prof. Suresh Babu', 'faculty5@kare.edu', 'faculty', 'Computer Science and Engineering', null, null],
       [null, null, 'admin', 'Demo Administrator', 'admin@kare.edu', 'admin', null, null, null]
     ];
 
     for (const [registerNo, employeeId, identifier, fullName, email, role, department, semester, section] of seeds) {
       const passwordHash = await bcrypt.hash(identifier || role, 12);
-      await query(
-        `INSERT INTO users(register_no, employee_id, full_name, email, password_hash, role, department, semester, section)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT DO NOTHING`,
-        [registerNo, employeeId, fullName, email, passwordHash, role, department, semester, section]
-      );
+      if (employeeId) {
+        await query(
+          `INSERT INTO users(register_no, employee_id, full_name, email, password_hash, role, department, semester, section, designation, phone)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'Assistant Professor',NULL)
+           ON CONFLICT(employee_id) DO UPDATE SET full_name=EXCLUDED.full_name,email=EXCLUDED.email,password_hash=EXCLUDED.password_hash,department=EXCLUDED.department,designation=EXCLUDED.designation,is_active=true,account_status='active'`,
+          [registerNo, employeeId, fullName, email, passwordHash, role, department, semester, section]
+        );
+      } else {
+        await query(
+          `INSERT INTO users(register_no, employee_id, full_name, email, password_hash, role, department, semester, section)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT DO NOTHING`,
+          [registerNo, employeeId, fullName, email, passwordHash, role, department, semester, section]
+        );
+      }
     }
 
     const departments = [
@@ -278,21 +291,35 @@ async function initDb() {
         [code,name,department,semester,year,courseType,KARE_CSE_2021_SOURCE]
       );
     }
-    // Make the development faculty account actually usable with the published CSE subject catalogue.
-    // This is an assignment in our portal, not a claim that this demo faculty member is a real KARE faculty member.
-    const faculty = await query("SELECT id FROM users WHERE role='faculty' AND email='faculty@kare.edu' LIMIT 1");
-    const facultyId = faculty.rows[0]?.id;
-    if (facultyId) {
+    // Demo faculty workload model: Faculty -> course offering -> semester + section + academic year.
+    // This prevents a semester change from mixing or deleting historical attendance.
+    const demoFacultyAssignments = [
+      ['FAC001','211CSE1401','1','S1','2026-27'],['FAC001','211CSE1402','1','S1','2026-27'],
+      ['FAC001','212CSE2301','2','S2','2026-27'],['FAC001','212CSE2305','2','S2','2026-27'],['FAC001','212CSE3302','3','S3','2026-27'],
+      ['FAC002','211MAT1301','1','S1','2026-27'],['FAC002','212CSE2302','2','S2','2026-27'],
+      ['FAC002','212CSE2303','2','S2','2026-27'],['FAC002','212CSE3301','3','S3','2026-27'],['FAC002','212CSE3303','3','S3','2026-27'],
+      ['FAC003','211CHY1301','1','S1','2026-27'],['FAC003','211EEE1301','1','S1','2026-27'],
+      ['FAC003','212CSE2403','2','S2','2026-27'],['FAC003','212CSE2101','2','S2','2026-27'],['FAC003','212CSE3304','3','S3','2026-27'],
+      ['FAC004','211PHY1301','1','S1','2026-27'],['FAC004','211ENG1301','1','S1','2026-27'],
+      ['FAC004','212CSE2102','2','S2','2026-27'],['FAC004','212CSE3305','3','S3','2026-27'],['FAC004','213CSE1301','1','S1','2026-27'],
+      ['FAC005','211CSE1401','1','S2','2026-27'],['FAC005','212CSE2304','2','S2','2026-27'],
+      ['FAC005','212CSE2303','2','S3','2026-27'],['FAC005','212CSE3302','3','S4','2026-27'],['FAC005','212CSE3303','3','S4','2026-27']
+    ];
+    for (const [employeeId,subjectCode,semester,section,academicYear] of demoFacultyAssignments) {
+      const f=await query("SELECT id FROM users WHERE employee_id=$1 AND role='faculty' LIMIT 1",[employeeId]);
+      const s=await query("SELECT id FROM subjects WHERE code=$1 LIMIT 1",[subjectCode]);
+      if(!f.rows[0]||!s.rows[0]) continue;
+      await query('INSERT INTO faculty_subjects(faculty_id,subject_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[f.rows[0].id,s.rows[0].id]);
       await query(
-        `INSERT INTO faculty_subjects(faculty_id,subject_id)
-         SELECT $1,s.id FROM subjects s
-         WHERE s.department='CSE'
+        `INSERT INTO course_offerings(subject_id,faculty_id,semester,section,academic_year,room,active)
+         VALUES($1,$2,$3,$4,$5,$6,true)
          ON CONFLICT DO NOTHING`,
-        [facultyId]
+        [s.rows[0].id,f.rows[0].id,semester,section,academicYear,'KARE BLOCK']
       );
     }
+    await query("UPDATE course_offerings SET active=false WHERE faculty_id IN (SELECT id FROM users WHERE employee_id IN ('FAC001','FAC002','FAC003','FAC004','FAC005')) AND academic_year <> '2026-27'");
 
-    console.log('KARE ONE database schema, public programme catalogue, CSE 2021 curriculum and faculty subject assignments are ready.');
+    console.log('KARE ONE database schema, public programme catalogue, named demo faculty, course offerings and secure attendance model are ready.');
     return true;
   } catch (error) {
     console.warn('Database initialization skipped:', error.code || error.message);

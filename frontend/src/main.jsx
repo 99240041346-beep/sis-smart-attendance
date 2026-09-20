@@ -827,7 +827,7 @@ function Portal({ initialUser, onLogout }) {
           setUser(merged);
           localStorage.setItem('kare_user', JSON.stringify(merged));
         }
-        setSubjects(subjectData.subjects || []);
+        setSubjects(user.role === 'faculty' && Array.isArray(overview.subjects) && overview.subjects.length ? overview.subjects : (subjectData.subjects || []));
         setFacultyStudents(studentData.students || []);
       })
       .catch(e => setError(e.message));

@@ -80,7 +80,7 @@ app.get('/api/me', auth, async (req, res) => {
 
 app.patch('/api/profile', auth, async (req, res) => {
   try {
-    const { full_name, email, department, semester, section, phone, designation } = req.body || {};
+    const { full_name, email, department, semester, section, phone, designation, profile_photo_url } = req.body || {};
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
 
     if (req.user.demo) {
@@ -94,16 +94,17 @@ app.patch('/api/profile', auth, async (req, res) => {
         semester: semester ?? demo.semester,
         section: section ?? demo.section,
         phone: phone ?? demo.phone ?? null,
-        designation: designation ?? demo.designation ?? null
+        designation: designation ?? demo.designation ?? null,
+        profile_photo_url: profile_photo_url ?? demo.profile_photo_url ?? null
       };
       return res.json({ user: { ...updated, password: undefined, name: updated.full_name } });
     }
 
     const r = await query(`UPDATE users
-      SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,designation=$7,updated_at=NOW()
+      SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,designation=$7,profile_photo_url=$8,updated_at=NOW()
       WHERE id=$8 AND is_active=true
       RETURNING id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation`,
-      [String(full_name).trim(), email || null, department || null, semester || null, section || null, phone || null, designation || null, req.user.sub]);
+      [String(full_name).trim(), email || null, department || null, semester || null, section || null, phone || null, designation || null, profile_photo_url || null, req.user.sub]);
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
     return res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });
   } catch (err) {

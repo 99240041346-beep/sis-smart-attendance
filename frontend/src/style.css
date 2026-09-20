@@ -439,3 +439,15 @@ button, input, select { font: inherit; }
 .live-monitor-panel{margin-top:18px;border-top:1px solid rgba(15,23,42,.08);padding-top:18px}
 .live-monitor-panel .page-heading{align-items:center}
 @media (max-width:700px){.live-session-grid{grid-template-columns:1fr}.live-monitor-panel .page-heading{align-items:flex-start;gap:12px;flex-direction:column}}
+
+
+.semester-selector{margin:18px 0 12px;padding:16px;border:1px solid #dfe5ee;border-radius:12px;background:#f8fafc}
+.semester-selector-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.semester-selector-title span{font-size:12px;font-weight:700;letter-spacing:.08em;color:#64748b}
+.semester-selector-title b{font-size:14px}
+.semester-selector-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.semester-choice{border:1px solid #d7dee8;background:#fff;border-radius:8px;padding:10px 8px;cursor:pointer;font-weight:600}
+.semester-choice:hover{border-color:#94a3b8}
+.semester-choice.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.selected-academic-context{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 14px;margin:10px 0;border-radius:8px;background:#f1f5f9;color:#334155}
+@media(max-width:760px){.semester-selector-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.semester-selector-title{align-items:flex-start;flex-direction:column}}

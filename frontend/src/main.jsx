@@ -525,7 +525,7 @@ function FacultyAttendancePage({ subjects=[] }) {
     setBusy(true);setError('');
     try{
       const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({...form,allowed_radius_meters:Number(form.allowed_radius_meters),qr_expires_minutes:Number(form.qr_expires_minutes)})});
-      setSession(d.session);setQr(d.session.qr_token||'');setQrImage(await QRCode.toDataURL(d.session.qr_token||'',{width:240,margin:2}));
+      setSession(d.session);setQr(d.qrToken||d.session.qr_token||'');setQrImage(await QRCode.toDataURL(d.qrToken||d.session.qr_token||'',{width:240,margin:2}));
     }catch(e){setError(e.message)}finally{setBusy(false)}
   }
   async function close(){
@@ -558,21 +558,19 @@ function StudentScanner() {
   const [scanner,setScanner]=useState(null),[stage,setStage]=useState('ready'),[result,setResult]=useState(''),[error,setError]=useState('');
   const [qrToken,setQrToken]=useState('');
   const [coords,setCoords]=useState(null);
-  async function locate(){
-    if(!navigator.geolocation)return setError('This device does not support location.');
-    await new Promise(resolve=>navigator.geolocation.getCurrentPosition(p=>{setCoords({latitude:p.coords.latitude,longitude:p.coords.longitude});resolve()},e=>{setError('Location permission is required for attendance: '+e.message);resolve()},{enableHighAccuracy:true,timeout:10000}));
-  }
   async function verify(decoded){
-    setQrToken(decoded);setStage('verifying');setError('');await locate();
+    setQrToken(decoded);setStage('verifying');setError('');
     try{
-      const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>resolve(p),e=>reject(e),{enableHighAccuracy:true,timeout:10000}));
+      if(!navigator.geolocation)throw new Error('This device does not support location.');
+      const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:10000,maximumAge:0}));
+      setCoords({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
       const fingerprint=[navigator.userAgent,navigator.platform,screen.width,screen.height,navigator.language].join('|');
-      const data=await api('/sis/attendance/verify',{method:'POST',body:JSON.stringify({qr_token:decoded,latitude:pos.coords.latitude,longitude:pos.coords.longitude,device_fingerprint:fingerprint,face_match_status:'not_checked',liveness_status:'not_checked'})});
+      const data=await api('/sis/attendance/verify',{method:'POST',body:JSON.stringify({qrToken:decoded,latitude:pos.coords.latitude,longitude:pos.coords.longitude,deviceFingerprint:fingerprint,faceMatchStatus:'not_checked',livenessStatus:'not_checked'})});
       setResult(data.message||'Attendance marked successfully.');setStage('success');
     }catch(e){setError(e.message);setStage('error')}
   }
   async function start(){
-    setError('');setResult('');setStage('scanning');
+    setError('');setResult('');setCoords(null);setStage('scanning');
     try{
       const instance=new Html5Qrcode('student-reader');setScanner(instance);
       await instance.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},async decoded=>{await instance.stop().catch(()=>{});setScanner(null);await verify(decoded)});
@@ -581,11 +579,11 @@ function StudentScanner() {
   async function stop(){if(scanner){await scanner.stop().catch(()=>{});setScanner(null)}setStage('ready')}
   useEffect(()=>()=>{if(scanner)scanner.stop().catch(()=>{})},[scanner]);
   return <section className="page-card data-workspace">
-    <div className="page-heading"><div><p className="eyebrow">STUDENT • ATTENDANCE</p><h2>Mark Attendance</h2><p>Scan the live faculty QR. Your location is checked against the faculty's allowed attendance radius.</p></div><span className="status-pill">{stage.toUpperCase()}</span></div>
-    <div className="attendance-steps"><span className={stage==='scanning'?'active':''}>1 SCAN QR</span><span>2 LOCATION</span><span>3 VERIFY</span><span>4 MARK</span></div>
+    <div className="page-heading"><div><p className="eyebrow">STUDENT • ATTENDANCE</p><h2>Mark Attendance</h2><p>Scan the live faculty QR. Your section, location and device security are checked before attendance is recorded.</p></div><span className="status-pill">{stage.toUpperCase()}</span></div>
+    <div className="attendance-steps"><span className={stage==='scanning'?'active':''}>1 SCAN QR</span><span className={coords?'active':''}>2 LOCATION</span><span className={stage==='verifying'?'active':''}>3 VERIFY</span><span className={stage==='success'?'active':''}>4 MARK</span></div>
     {stage==='success'?<div className="save-success attendance-result">✓ {result}</div>:<><div id="student-reader" className="scanner-box"/><div className="form-actions"><button className="sis-sign-in compact" onClick={start} disabled={stage==='verifying'}>SCAN LIVE QR</button><button className="secondary-btn" onClick={stop}>STOP</button></div></>}
     {error&&<div className="login-error">{error}</div>}
-    {stage==='verifying'&&<div className="workspace-loading">Checking QR session, expiry, location, device security and attendance eligibility…</div>}
+    {stage==='verifying'&&<div className="workspace-loading">Checking QR session, expiry, section, location and device security…</div>}
     {coords&&stage!=='success'&&<div className="security-note">Location captured for this attendance check.</div>}
   </section>;
 }
@@ -616,10 +614,36 @@ function FacultyReportsPage() {
   </section>;
 }
 
-function FacultyLivePage({ stats }) {
-  const sessions=stats.openSessions||[];
-  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">FACULTY • LIVE ATTENDANCE</p><h2>Live Attendance</h2><p>Open attendance sessions currently controlled by this faculty account.</p></div><span className="status-pill">{sessions.length} OPEN</span></div>
-    <div className="live-session-grid">{sessions.map(s=><article className="live-session-card" key={s.id}><div className="live-dot">LIVE</div><h3>{s.subject_code||s.code||'Attendance Session'}</h3><p>Section <b>{s.section||'All'}</b></p><p>Room <b>{s.room||'—'}</b></p><p>Expires <b>{s.qr_expires_at?new Date(s.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></article>)}{!sessions.length&&<div className="empty-workspace"><b>No live sessions</b><span>Start Attendance to open a controlled QR session.</span></div>}</div>
+function FacultyLivePage() {
+  const [sessions,setSessions]=useState([]),[selected,setSelected]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  async function load(showLoading=false){
+    if(showLoading)setLoading(true);
+    try{const d=await api('/sis/faculty/attendance/live');setSessions(d.sessions||[]);setSelected(current=>current&&d.sessions.some(s=>s.id===current)?current:(d.sessions[0]?.id||''));setError('');}
+    catch(e){setError(e.message)}finally{if(showLoading)setLoading(false)}
+  }
+  useEffect(()=>{load(true);const id=setInterval(()=>load(false),3000);return()=>clearInterval(id)},[]);
+  const active=sessions.find(s=>s.id===selected)||sessions[0];
+  async function closeSession(id){
+    try{await api('/attendance/sessions/'+id+'/close',{method:'POST'});await load(false);}
+    catch(e){setError(e.message)}
+  }
+  return <section className="page-card data-workspace">
+    <div className="page-heading"><div><p className="eyebrow">FACULTY • LIVE ATTENDANCE</p><h2>Live Attendance Control Room</h2><p>Monitor students as they are marked and review location/device security events in real time.</p></div><span className="status-pill">{sessions.length} OPEN</span></div>
+    {error&&<div className="login-error">{error}</div>}
+    {loading?<div className="workspace-loading">Loading live attendance...</div>:!sessions.length?<div className="empty-workspace"><b>No live sessions</b><span>Start Attendance to open a controlled QR session.</span></div>:<>
+      <div className="live-session-grid">{sessions.map(s=><button type="button" className={active?.id===s.id?'live-session-card selected':'live-session-card'} key={s.id} onClick={()=>setSelected(s.id)}>
+        <div className="live-dot">LIVE</div><h3>{s.subject_code||'Attendance Session'}</h3><p>Section <b>{s.section||'All'}</b> • Room <b>{s.room||'—'}</b></p><p>Present <b>{s.present_count}/{s.expected_count||0}</b></p><p>Expires <b>{s.qr_expires_at?new Date(s.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p>
+      </button>)}</div>
+      {active&&<div className="live-monitor-panel">
+        <div className="page-heading"><div><p className="eyebrow">SESSION MONITOR</p><h3>{active.subject_code} — {active.subject_name}</h3><p>Section {active.section||'All'} • {active.room||'Room not set'} • Radius {active.allowed_radius_meters||'—'} m</p></div><button className="danger-btn" onClick={()=>closeSession(active.id)}>CLOSE ATTENDANCE</button></div>
+        <div className="report-summary"><div><span>Present</span><b>{active.records.length}</b></div><div><span>Expected</span><b>{active.expected_count||0}</b></div><div><span>Security Events</span><b>{active.security_events.length}</b></div><div><span>Remaining</span><b>{Math.max((active.expected_count||0)-active.records.length,0)}</b></div></div>
+        <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Student</th><th>Section</th><th>Marked At</th><th>Distance</th><th>Identity</th><th>Risk</th></tr></thead><tbody>
+          {active.records.map(r=><tr key={r.id}><td><b>{r.register_no||'—'}</b><small>{r.full_name}</small></td><td>{r.section||'—'}</td><td>{r.marked_at?new Date(r.marked_at).toLocaleTimeString('en-IN'):'—'}</td><td>{r.distance_meters==null?'—':Math.round(Number(r.distance_meters))+' m'}</td><td>{r.face_match_status||'not_checked'} / {r.liveness_status||'not_checked'}</td><td><span className="status-pill">{r.risk_score??'—'}</span></td></tr>)}
+          {!active.records.length&&<tr><td colSpan="6" className="empty-table">Waiting for students to scan the QR...</td></tr>}
+        </tbody></table></div>
+        {active.security_events.length>0&&<div className="security-note"><b>Security events:</b> {active.security_events.map(e=>e.event_type.replaceAll('_',' ')).join(' • ')}</div>}
+      </div>}
+    </>}
   </section>;
 }
 
@@ -725,7 +749,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'admin' && page === 'Reports') return <AdminReportPage />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'faculty' && page === 'Start Attendance') return <FacultyAttendancePage subjects={subjects} />;
-    if (user.role === 'faculty' && page === 'Live Attendance') return <FacultyLivePage stats={stats} />;
+    if (user.role === 'faculty' && page === 'Live Attendance') return <FacultyLivePage />;
     if (user.role === 'faculty' && (page === 'My Courses' || page === 'Class Timetable')) return <FacultyClassesPage />;
     if (user.role === 'faculty' && page === 'Reports') return <FacultyReportsPage />;
     if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;

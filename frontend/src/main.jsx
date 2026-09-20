@@ -16,17 +16,28 @@ const ROLE_CONFIG = {
 
 async function api(path, options = {}) {
   const token = localStorage.getItem('kare_token') || sessionStorage.getItem('kare_token');
-  const response = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
+  const request = async () => {
+    const response = await fetch(API + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        ...(options.headers || {})
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    return data;
+  };
+  try { return await request(); }
+  catch (err) {
+    if (err instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(err.message)) {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      try { return await request(); } catch (_retryErr) {}
+      throw new Error('KARE API is temporarily unreachable. Please refresh once and try again.');
     }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
+    throw err;
+  }
 }
 
 function Login({ onLogin }) {

@@ -177,7 +177,7 @@ function Profile({ user, onSaved }) {
       </div>
 
       <form className="profile-form" onSubmit={save}>
-        <div className="profile-overview full"><div><span>ROLE</span><b>FACULTY</b></div><div><span>STATUS</span><b className="profile-active">ACTIVE</b></div><div><span>EMPLOYEE ID</span><b>{user.employee_id || 'FAC001'}</b></div></div>
+        <div className="profile-overview full"><div><span>ROLE</span><b>{user.role.toUpperCase()}</b></div><div><span>STATUS</span><b className="profile-active">ACTIVE</b></div><div><span>EMPLOYEE ID</span><b>{user.employee_id || 'FAC001'}</b></div></div>
         <div className="section-label">Personal information</div>
         <div className="field">
           <label>Full Name</label>
@@ -263,7 +263,7 @@ function StudentDashboard({ stats }) {
   );
 }
 
-function FacultyDashboard({ user, stats, onNavigate }) {
+function FacultyDashboard({ user, stats, onNavigate, facultyStudents }) {
   const firstName = (user.full_name || user.name || 'Faculty').split(' ')[0];
   return (
     <>
@@ -289,7 +289,7 @@ function FacultyDashboard({ user, stats, onNavigate }) {
       <div className="faculty-stat-grid">
         <article className="faculty-stat-card"><span>Attendance Sessions</span><strong>{stats.sessions || 0}</strong><small>Sessions created by you</small></article>
         <article className="faculty-stat-card"><span>Today's Classes</span><strong>0</strong><small>Timetable module next</small></article>
-        <article className="faculty-stat-card"><span>Students</span><strong>—</strong><small>Section roster next</small></article>
+        <article className="faculty-stat-card"><span>Students</span><strong>{facultyStudents.length}</strong><small>Managed student accounts</small></article>
         <article className="faculty-stat-card"><span>Account</span><strong>ACTIVE</strong><small>Faculty access enabled</small></article>
       </div>
 
@@ -346,6 +346,27 @@ function AdminDashboard({ stats }) {
       </div>
     </>
   );
+}
+
+function StudentManagement() {
+  const empty={register_no:'',password:'',full_name:'',email:'',department:'Computer Science and Engineering',semester:'',section:'',phone:'',profile_photo_url:''};
+  const [students,setStudents]=useState([]),[form,setForm]=useState(empty),[editing,setEditing]=useState(null),[showForm,setShowForm]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[search,setSearch]=useState('');
+  async function load(){try{const data=await api('/faculty/students');setStudents(data.students||[]);}catch(e){setError(e.message);}} useEffect(()=>{load();},[]);
+  const change=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const reset=()=>{setForm(empty);setEditing(null);setShowForm(false)};
+  function edit(st){setEditing(st.id);setForm({register_no:st.register_no||'',password:'',full_name:st.full_name||st.name||'',email:st.email||'',department:st.department||'',semester:st.semester||'',section:st.section||'',phone:st.phone||'',profile_photo_url:st.profile_photo_url||''});setShowForm(true);setMessage('');setError('');}
+  function readPhoto(file){if(!file)return;if(!file.type.startsWith('image/')){setError('Please choose an image file.');return}if(file.size>500*1024){setError('Photo must be 500 KB or smaller.');return}const r=new FileReader();r.onload=()=>change('profile_photo_url',r.result);r.onerror=()=>setError('Unable to read the photo.');r.readAsDataURL(file)}
+  async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{if(editing){const d=await api('/faculty/students/'+editing,{method:'PATCH',body:JSON.stringify({full_name:form.full_name,email:form.email,department:form.department,semester:form.semester,section:form.section,phone:form.phone,profile_photo_url:form.profile_photo_url||null})});setStudents(p=>p.map(x=>x.id===editing?d.student:x));setMessage('Student details updated successfully.')}else{const d=await api('/faculty/students',{method:'POST',body:JSON.stringify(form)});setStudents(p=>[d.student,...p]);setMessage('Student account created. Login ID: '+d.student.register_no)}setForm(empty);setEditing(null);setShowForm(false)}catch(e){setError(e.message)}finally{setBusy(false)}}
+  const filtered=students.filter(st=>{const q=search.trim().toLowerCase();if(!q)return true;return [st.register_no,st.full_name,st.name,st.email,st.section,st.department].filter(Boolean).some(v=>String(v).toLowerCase().includes(q))});
+  return <section className="page-card student-management"><div className="page-heading"><div><p className="eyebrow">FACULTY • STUDENT MANAGEMENT</p><h2>Students & Login Accounts</h2><p>Create a real student SIS account, maintain academic details, and attach the student's verification photo.</p></div><button className="sis-sign-in compact" onClick={()=>{setShowForm(true);setEditing(null);setForm(empty);setMessage('');setError('')}}>+ ADD STUDENT</button></div>
+    {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
+    {showForm&&<form className="student-create-form" onSubmit={save}><div className="student-form-title"><div><p className="eyebrow">{editing?'EDIT ACCOUNT':'NEW ACCOUNT'}</p><h3>{editing?'Update student':'Create student login'}</h3></div><button type="button" className="secondary-btn" onClick={reset}>CANCEL</button></div>
+      <div className="student-photo-editor"><div className="student-photo-preview">{form.profile_photo_url?<img src={form.profile_photo_url} alt="Student preview"/>:<span>{(form.full_name||'S').charAt(0).toUpperCase()}</span>}</div><div><label className="photo-upload-label">Student photo</label><input type="file" accept="image/*" onChange={e=>readPhoto(e.target.files?.[0])}/><small>Clear front-facing photo. Maximum 500 KB. Saved with the student verification profile.</small></div></div>
+      <div className="student-form-grid"><div className="field"><label>Register Number</label><input value={form.register_no} disabled={!!editing} onChange={e=>change('register_no',e.target.value)} placeholder="Example: 23CSE001" required/></div>{!editing&&<div className="field"><label>Initial Password</label><input type="password" value={form.password} onChange={e=>change('password',e.target.value)} placeholder="Minimum 4 characters" minLength="4" required/>}</div>}<div className="field"><label>Full Name</label><input value={form.full_name} onChange={e=>change('full_name',e.target.value)} required/></div><div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>change('email',e.target.value)}/></div><div className="field"><label>Department</label><input value={form.department} onChange={e=>change('department',e.target.value)}/></div><div className="field"><label>Semester</label><input value={form.semester} onChange={e=>change('semester',e.target.value)} placeholder="Example: 5"/></div><div className="field"><label>Section</label><input value={form.section} onChange={e=>change('section',e.target.value)} placeholder="Example: S19"/></div><div className="field"><label>Phone</label><input value={form.phone} onChange={e=>change('phone',e.target.value)}/></div></div>
+      <div className="form-actions"><button className="sis-sign-in compact" disabled={busy}>{busy?'SAVING...':editing?'UPDATE STUDENT':'CREATE STUDENT LOGIN'}</button></div>{!editing&&<div className="student-security-note">The student can immediately sign in using the register number and password you create. Passwords are hashed in the real database and never returned in the student list.</div>}</form>}
+    <div className="student-list-toolbar"><div><b>{students.length}</b> student account{students.length===1?'':'s'}</div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search register no, name, section..."/></div>
+    <div className="student-table-wrap"><table className="student-table"><thead><tr><th>Student</th><th>Register No</th><th>Academic</th><th>Contact</th><th>Photo</th><th>Action</th></tr></thead><tbody>{filtered.map(st=><tr key={st.id}><td><div className="student-cell"><div className="student-mini-photo">{st.profile_photo_url?<img src={st.profile_photo_url} alt=""/>:(st.full_name||'S').charAt(0)}</div><div><b>{st.full_name||st.name}</b><small>{st.email||'No email'}</small></div></div></td><td><strong>{st.register_no}</strong></td><td><span>{st.department||'—'}</span><small>Sem {st.semester||'—'} • {st.section||'No section'}</small></td><td>{st.phone||'—'}</td><td><span className={st.profile_photo_url?'photo-status yes':'photo-status'}>{st.profile_photo_url?'VERIFIED PHOTO':'NO PHOTO'}</span></td><td><button className="text-action" onClick={()=>edit(st)}>Edit</button></td></tr>)}{!filtered.length&&<tr><td colSpan="6" className="empty-table">No students found. Create the first student account.</td></tr>}</tbody></table></div>
+  </section>
 }
 
 function QRGenerator({ subjects }) {
@@ -447,6 +468,7 @@ function Portal({ initialUser, onLogout }) {
   const [page, setPage] = useState('Dashboard');
   const [stats, setStats] = useState({});
   const [subjects, setSubjects] = useState([]);
+  const [facultyStudents, setFacultyStudents] = useState([]);
   const [error, setError] = useState('');
 
   const studentMenu = ['Dashboard', 'Profile', 'Attendance', 'Timetable', 'Subjects', 'Notifications', 'Leave Requests', 'History'];
@@ -455,8 +477,8 @@ function Portal({ initialUser, onLogout }) {
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;
 
   useEffect(() => {
-    Promise.all([api('/dashboard'), api('/subjects')])
-      .then(([dashboard, subjectData]) => { setStats(dashboard); setSubjects(subjectData.subjects || []); })
+    Promise.all([api('/dashboard'), api('/subjects'), user.role === 'faculty' ? api('/faculty/students') : Promise.resolve({ students: [] })])
+      .then(([dashboard, subjectData, studentData]) => { setStats(dashboard); setSubjects(subjectData.subjects || []); setFacultyStudents(studentData.students || []); })
       .catch(e => setError(e.message));
   }, []);
 
@@ -472,9 +494,10 @@ function Portal({ initialUser, onLogout }) {
     if (page === 'Profile') return <Profile user={user} onSaved={updated => setUser(updated)} />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
+    if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;
     if (page === 'Dashboard') {
       if (user.role === 'student') return <StudentDashboard stats={stats} />;
-      if (user.role === 'faculty') return <FacultyDashboard user={user} stats={stats} onNavigate={setPage} />;
+      if (user.role === 'faculty') return <FacultyDashboard user={user} stats={stats} onNavigate={setPage} facultyStudents={facultyStudents} />;
       return <AdminDashboard stats={stats} />;
     }
     return (

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(120);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(30) NOT NULL DEFAULT 'active';
 
 CREATE TABLE IF NOT EXISTS subjects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -88,27 +89,66 @@ CREATE TABLE IF NOT EXISTS programs (
 
 CREATE TABLE IF NOT EXISTS student_profiles (
   student_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  application_no VARCHAR(60),
+  admission_no VARCHAR(60),
   admission_year INT,
   batch VARCHAR(30),
+  academic_year VARCHAR(30),
+  degree VARCHAR(100),
+  programme VARCHAR(160),
   date_of_birth DATE,
   gender VARCHAR(30),
+  nationality VARCHAR(80),
+  religion VARCHAR(80),
+  community VARCHAR(80),
+  caste VARCHAR(120),
   blood_group VARCHAR(10),
+  aadhaar_last4 VARCHAR(4),
+  nad_id VARCHAR(80),
   address TEXT,
+  city VARCHAR(100),
+  district VARCHAR(100),
+  state VARCHAR(100),
+  pincode VARCHAR(12),
+  father_name VARCHAR(160),
+  mother_name VARCHAR(160),
   parent_name VARCHAR(160),
   parent_phone VARCHAR(30),
+  parent_email VARCHAR(160),
+  emergency_contact_name VARCHAR(160),
+  emergency_contact_phone VARCHAR(30),
+  hosteller BOOLEAN NOT NULL DEFAULT FALSE,
+  hostel_name VARCHAR(120),
+  hostel_room VARCHAR(40),
+  transport_required BOOLEAN NOT NULL DEFAULT FALSE,
+  transport_route VARCHAR(120),
   faculty_advisor_id UUID REFERENCES users(id) ON DELETE SET NULL,
   program_id UUID REFERENCES programs(id) ON DELETE SET NULL,
   photo_url TEXT,
+  extra_details JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS faculty_profiles (
   faculty_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  faculty_id_code VARCHAR(60),
+  school VARCHAR(160),
+  faculty_type VARCHAR(80),
+  employment_status VARCHAR(40) NOT NULL DEFAULT 'active',
+  gender VARCHAR(30),
+  date_of_birth DATE,
+  nationality VARCHAR(80),
+  alternate_phone VARCHAR(30),
+  address TEXT,
   qualification VARCHAR(240),
   specialization VARCHAR(240),
+  research_area VARCHAR(240),
   joining_date DATE,
+  relieving_date DATE,
   office_room VARCHAR(80),
+  experience_years NUMERIC(5,2),
   photo_url TEXT,
+  extra_details JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -259,6 +299,10 @@ ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS liveness_status VARCHAR(
 ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS face_match_status VARCHAR(30);
 ALTER TABLE attendance_records ADD COLUMN IF NOT EXISTS risk_score NUMERIC(5,2);
 
+CREATE INDEX IF NOT EXISTS idx_student_profiles_admission ON student_profiles(admission_no);
+CREATE INDEX IF NOT EXISTS idx_student_profiles_application ON student_profiles(application_no);
+CREATE INDEX IF NOT EXISTS idx_student_profiles_advisor ON student_profiles(faculty_advisor_id);
+CREATE INDEX IF NOT EXISTS idx_faculty_profiles_school ON faculty_profiles(school);
 CREATE INDEX IF NOT EXISTS idx_course_offerings_faculty ON course_offerings(faculty_id);
 CREATE INDEX IF NOT EXISTS idx_course_registrations_student ON course_registrations(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_student ON grades(student_id);

@@ -262,7 +262,7 @@ async function initDb() {
       await query(
         `INSERT INTO faculty_subjects(faculty_id,subject_id)
          SELECT $1,s.id FROM subjects s
-         WHERE s.department='CSE' AND s.curriculum_year='2021'
+         WHERE s.department='CSE'
          ON CONFLICT DO NOTHING`,
         [facultyId]
       );

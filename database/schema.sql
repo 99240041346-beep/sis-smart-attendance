@@ -311,6 +311,7 @@ CREATE INDEX IF NOT EXISTS idx_student_profiles_advisor ON student_profiles(facu
 CREATE INDEX IF NOT EXISTS idx_faculty_profiles_school ON faculty_profiles(school);
 CREATE INDEX IF NOT EXISTS idx_course_offerings_faculty ON course_offerings(faculty_id);
 CREATE INDEX IF NOT EXISTS idx_course_offerings_faculty_semester ON course_offerings(faculty_id,semester,academic_year,section);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_course_offerings_assignment ON course_offerings(subject_id,faculty_id,semester,section,academic_year);
 CREATE INDEX IF NOT EXISTS idx_attendance_sessions_offering ON attendance_sessions(offering_id);
 CREATE INDEX IF NOT EXISTS idx_course_registrations_student ON course_registrations(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_student ON grades(student_id);

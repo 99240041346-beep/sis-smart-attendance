@@ -390,3 +390,33 @@ button, input, select { font: inherit; }
   .sis-session-row { grid-template-columns:55px 1fr; }
   .sis-session-row > strong { display:none; }
 }
+
+/* A-Z FACULTY / ADMIN WORKSPACES */
+.data-workspace{overflow:hidden}
+.data-table-wrap{overflow:auto;border:1px solid #e1e7ee;border-radius:6px;background:#fff}
+.data-table{width:100%;border-collapse:collapse;min-width:760px}
+.data-table th{background:#f6f8fa;color:#718096;font-size:9px;text-transform:uppercase;letter-spacing:.08em;text-align:left;padding:11px 13px;border-bottom:1px solid #e1e7ee}
+.data-table td{padding:12px 13px;border-bottom:1px solid #edf0f4;color:#4a5b70;font-size:11px;vertical-align:middle}
+.data-table tr:last-child td{border-bottom:0}
+.data-table td b{display:block;color:#2d4057;font-size:11px}
+.data-table td small{display:block;color:#8793a2;font-size:9px;margin-top:3px}
+.workspace-loading,.empty-workspace{padding:42px 20px;text-align:center;color:#7e8b9c;font-size:11px}
+.empty-workspace b,.empty-workspace span{display:block}
+.empty-workspace b{color:#3b4e64;font-size:14px;margin-bottom:5px}
+.report-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.report-summary>div{border:1px solid #e1e7ee;border-radius:5px;padding:15px;background:#fafbfd}
+.report-summary span,.report-summary b{display:block}
+.report-summary span{color:#8491a1;font-size:9px}
+.report-summary b{color:#174f86;font-size:21px;margin-top:7px}
+.live-session-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.live-session-card{position:relative;border:1px solid #dce4ed;border-radius:6px;padding:17px;background:#fafbfd}
+.live-session-card h3{margin:13px 0 10px;color:#293b50;font-size:14px}
+.live-session-card p{margin:7px 0;color:#7c8999;font-size:10px}
+.live-session-card p b{color:#405268}
+.live-dot{display:inline-block;padding:4px 7px;border-radius:3px;background:#eef7f1;color:#36734d;font-size:8px;font-weight:800;letter-spacing:.08em}
+.inline-create-form{display:grid;grid-template-columns:1fr 2fr 1.4fr .8fr auto;gap:8px;margin-bottom:14px}
+.inline-create-form input{min-width:0;border:1px solid #ccd6e2;border-radius:4px;padding:10px 11px;outline:none;color:#26374d;background:#fff}
+.inline-create-form input:focus{border-color:#2d70aa}
+.audit-json{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,monospace;font-size:9px!important;color:#758397!important}
+@media(max-width:900px){.live-session-grid{grid-template-columns:1fr 1fr}.inline-create-form{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){.live-session-grid,.report-summary,.inline-create-form{grid-template-columns:1fr}}

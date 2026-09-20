@@ -123,6 +123,67 @@ app.get('/api/dashboard', auth, async (req, res) => {
   } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); }
 });
 
+app.get('/api/faculty/students', auth, requireRole('faculty'), async (req, res) => {
+  try {
+    if (req.user.demo) return res.json({ students: Object.values(DEMO_USERS).filter(u => u.role === 'student').map(({ password, ...u }) => ({ ...u, name: u.full_name })) });
+    const r = await query(`SELECT id,register_no,full_name,email,department,semester,section,phone,profile_photo_url,is_active,created_at FROM users WHERE role='student' AND is_active=true ORDER BY register_no,full_name`);
+    res.json({ students: r.rows.map(u => ({ ...u, name: u.full_name })) });
+  } catch (_err) { res.status(503).json({ error: 'Student service unavailable' }); }
+});
+
+app.post('/api/faculty/students', auth, requireRole('faculty'), async (req, res) => {
+  try {
+    const { register_no, password, full_name, email, department, semester, section, phone, profile_photo_url } = req.body || {};
+    if (!register_no || !password || !full_name) return res.status(400).json({ error: 'Register number, password and full name are required' });
+    if (String(password).length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error: 'Profile photo is too large. Use an image below about 500 KB.' });
+    if (req.user.demo) {
+      const key = String(register_no).trim().toLowerCase();
+      const existing = Object.values(DEMO_USERS).find(u => u.role === 'student' && [u.register_no, u.email].filter(Boolean).map(v => String(v).toLowerCase()).includes(key));
+      if (existing) return res.status(409).json({ error: 'A student with this register number or email already exists' });
+      const id = `demo-student-${crypto.randomBytes(5).toString('hex')}`;
+      DEMO_USERS[id] = { id, register_no:String(register_no).trim(), employee_id:null, full_name:String(full_name).trim(), email:email ? String(email).trim() : null, role:'student', department:department||null, semester:semester||null, section:section||null, phone:phone||null, profile_photo_url:profile_photo_url||null, password:String(password) };
+      const { password: _password, ...safe } = DEMO_USERS[id];
+      return res.status(201).json({ student:{ ...safe, name:safe.full_name } });
+    }
+    const passwordHash = await bcrypt.hash(String(password), 12);
+    const r = await query(`INSERT INTO users (register_no,full_name,email,password_hash,role,department,semester,section,phone,profile_photo_url)
+      VALUES($1,$2,$3,$4,'student',$5,$6,$7,$8,$9)
+      RETURNING id,register_no,full_name,email,role,department,semester,section,phone,profile_photo_url,is_active,created_at`,
+      [String(register_no).trim(),String(full_name).trim(),email ? String(email).trim() : null,passwordHash,department||null,semester||null,section||null,phone||null,profile_photo_url||null]);
+    const student = r.rows[0];
+    res.status(201).json({ student:{ ...student, name:student.full_name } });
+  } catch (err) {
+    console.error('Student creation failed:', err.message);
+    if (err.code === '23505') return res.status(409).json({ error:'Register number or email is already in use' });
+    res.status(503).json({ error:'Unable to create student' });
+  }
+});
+
+app.patch('/api/faculty/students/:id', auth, requireRole('faculty'), async (req, res) => {
+  try {
+    const { full_name,email,department,semester,section,phone,profile_photo_url } = req.body || {};
+    if (!full_name || !String(full_name).trim()) return res.status(400).json({ error:'Full name is required' });
+    if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error:'Profile photo is too large' });
+    if (req.user.demo) {
+      const student = DEMO_USERS[req.params.id];
+      if (!student || student.role !== 'student') return res.status(404).json({ error:'Student not found' });
+      Object.assign(student,{full_name:String(full_name).trim(),email:email||null,department:department||null,semester:semester||null,section:section||null,phone:phone||null,profile_photo_url:profile_photo_url||null});
+      const { password: _password, ...safe } = student;
+      return res.json({ student:{ ...safe, name:safe.full_name } });
+    }
+    const r = await query(`UPDATE users SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,profile_photo_url=$7,updated_at=NOW()
+      WHERE id=$8 AND role='student' AND is_active=true
+      RETURNING id,register_no,full_name,email,role,department,semester,section,phone,profile_photo_url,is_active`,
+      [String(full_name).trim(),email||null,department||null,semester||null,section||null,phone||null,profile_photo_url||null,req.params.id]);
+    if (!r.rows[0]) return res.status(404).json({ error:'Student not found' });
+    res.json({ student:{ ...r.rows[0], name:r.rows[0].full_name } });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error:'Email is already in use' });
+    res.status(503).json({ error:'Unable to update student' });
+  }
+});
+
 app.get('/api/subjects', auth, async (_req, res) => { try { const r = await query(`SELECT id,code,name,department,semester FROM subjects ORDER BY code`); res.json({ subjects: r.rows }); } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); } });
 app.post('/api/subjects', auth, requireRole('admin'), async (req, res) => { try { const { code, name, department, semester } = req.body || {}; if (!code || !name) return res.status(400).json({ error: 'code and name are required' }); const r = await query(`INSERT INTO subjects(code,name,department,semester) VALUES($1,$2,$3,$4) RETURNING id,code,name,department,semester`, [code,name,department||null,semester||null]); res.status(201).json({ subject: r.rows[0] }); } catch (err) { res.status(err.code === '23505' ? 409 : 503).json({ error: err.code === '23505' ? 'Subject code already exists' : 'Unable to create subject' }); } });
 app.post('/api/attendance/sessions', auth, requireRole('faculty'), async (req, res) => { try { const { subjectId, section, room, durationSeconds=60 } = req.body || {}; if (!subjectId) return res.status(400).json({ error: 'subjectId is required' }); const token = crypto.randomBytes(32).toString('base64url'); const seconds = Math.max(15, Math.min(Number(durationSeconds) || 60, 300)); const expiresAt = new Date(Date.now() + seconds * 1000); const r = await query(`INSERT INTO attendance_sessions(faculty_id,subject_id,section,room,qr_token_hash,qr_expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,subject_id,section,room,qr_expires_at,status,started_at`, [req.user.sub,subjectId,section||null,room||null,hashToken(token),expiresAt]); res.status(201).json({ session:r.rows[0], qrToken:token }); } catch (err) { console.error(err); res.status(503).json({ error:'Unable to start attendance session' }); } });

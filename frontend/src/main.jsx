@@ -5,6 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import './style.css';
 import AdminStudentManagement from './AdminStudentManagement';
 import AdminFacultyFIS from './AdminFacultyManagement';
+import TeachingAssignments from './TeachingAssignments';
 
 const API = (import.meta.env.VITE_API_URL || 'https://kare-one-api.onrender.com/api').replace(/\/$/, '');
 
@@ -835,7 +836,7 @@ function Portal({ initialUser, onLogout }) {
 
   const studentMenu = ['Dashboard', 'Attendance', 'Grievances', 'Semester', 'Arrear Registration', 'Course Registration', 'OE-HSS Registration', 'Grade', 'Seating & Time Table', 'Industrial Training TPO', 'Travel History', 'One Credit', 'Online / InternIT Courses', 'NonCGPA', 'Makeup', 'Fees', 'Exam Papers', 'Course Feedback', 'Profile'];
   const facultyMenu = ['Dashboard', 'Profile', 'My Courses', 'Class Timetable', 'Start Attendance', 'Live Attendance', 'Students', 'Reports'];
-  const adminMenu = ['Dashboard', 'Profile', 'Students', 'Faculty', 'Departments', 'Subjects', 'Timetable', 'Reports', 'Audit Logs'];
+  const adminMenu = ['Dashboard', 'Profile', 'Students', 'Faculty', 'Teaching Assignments', 'Departments', 'Subjects', 'Timetable', 'Reports', 'Audit Logs'];
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;
 
   useEffect(() => {
@@ -879,6 +880,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'student' && page !== 'Dashboard') return <StudentSisModule page={page} user={user} stats={stats} />;
     if (user.role === 'admin' && page === 'Students') return <AdminStudentManagement />;
     if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyFIS />;
+    if (user.role === 'admin' && page === 'Teaching Assignments') return <TeachingAssignments />;
     if (user.role === 'admin' && page === 'Subjects') return <AdminSubjectsPage />;
     if (user.role === 'admin' && page === 'Departments') return <AdminDepartmentsPage />;
     if (user.role === 'admin' && page === 'Timetable') return <AdminTimetablePage />;

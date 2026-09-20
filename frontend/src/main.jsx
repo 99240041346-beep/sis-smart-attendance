@@ -292,7 +292,7 @@ function FacultyDashboard({ user, stats, onNavigate, facultyStudents }) {
         </section>
 
         <section className="page-card faculty-panel">
-          <div className="panel-heading"><div><p className="eyebrow">FACULTY PROFILE</p><h3>Account summary</h3></div><button className="text-action" onClick={() => onNavigate('Profile')}>Edit profile</button></div>
+          <div className="panel-heading"><div><p className="eyebrow">FACULTY PROFILE</p><h3>Account summary</h3></div><button className="text-action" onClick={() => onNavigate('Profile')}>View profile</button></div>
           <div className="profile-summary-list">
             <div><span>Name</span><b>{user.full_name || user.name || '—'}</b></div>
             <div><span>Designation</span><b>{user.designation || 'Assistant Professor'}</b></div>

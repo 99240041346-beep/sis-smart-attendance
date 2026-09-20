@@ -37,7 +37,7 @@ async function initDb() {
     ];
 
     for (const [registerNo, employeeId, identifier, fullName, email, role, department, semester, section] of seeds) {
-      const passwordHash = await bcrypt.hash(identifier, 12);
+      const passwordHash = await bcrypt.hash(identifier || role, 12);
       await query(
         `INSERT INTO users(register_no, employee_id, full_name, email, password_hash, role, department, semester, section)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)

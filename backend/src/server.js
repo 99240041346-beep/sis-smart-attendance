@@ -81,6 +81,7 @@ app.get('/api/me', auth, async (req, res) => {
 
 app.patch('/api/profile', auth, async (req, res) => {
   try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Profile changes are controlled by the administrator' });
     const { full_name, email, department, semester, section, phone, designation, profile_photo_url } = req.body || {};
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
 
@@ -112,6 +113,52 @@ app.patch('/api/profile', auth, async (req, res) => {
     console.error('Profile update failed:', err.message);
     if (err.code === '23505') return res.status(409).json({ error: 'Email is already in use' });
     return res.status(503).json({ error: 'Profile service unavailable' });
+  }
+});
+
+app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
+  try {
+    if (req.user.demo) {
+      const faculty = Object.values(DEMO_USERS).filter(u => u.role === 'faculty').map(({ password, ...u }) => ({ ...u, name: u.full_name }));
+      return res.json({ faculty });
+    }
+    const r = await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url,is_active,created_at
+      FROM users WHERE role='faculty' AND is_active=true ORDER BY employee_id,full_name`);
+    return res.json({ faculty: r.rows.map(u => ({ ...u, name: u.full_name })) });
+  } catch (_err) { return res.status(503).json({ error: 'Faculty service unavailable' }); }
+});
+
+app.patch('/api/admin/faculty/:id', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { full_name, email, department, designation, phone, profile_photo_url } = req.body || {};
+    if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
+    if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error: 'Profile photo is too large' });
+
+    if (req.user.demo) {
+      const faculty = DEMO_USERS[req.params.id];
+      if (!faculty || faculty.role !== 'faculty') return res.status(404).json({ error: 'Faculty not found' });
+      Object.assign(faculty, {
+        full_name: String(full_name).trim(),
+        email: email || null,
+        department: department || null,
+        designation: designation || null,
+        phone: phone || null,
+        profile_photo_url: profile_photo_url || null
+      });
+      const { password: _password, ...safe } = faculty;
+      return res.json({ faculty: { ...safe, name: safe.full_name } });
+    }
+
+    const r = await query(`UPDATE users
+      SET full_name=$1,email=$2,department=$3,designation=$4,phone=$5,profile_photo_url=$6,updated_at=NOW()
+      WHERE id=$7 AND role='faculty' AND is_active=true
+      RETURNING id,employee_id,full_name,email,role,department,designation,phone,profile_photo_url,is_active`,
+      [String(full_name).trim(), email || null, department || null, designation || null, phone || null, profile_photo_url || null, req.params.id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Faculty not found' });
+    return res.json({ faculty: { ...r.rows[0], name: r.rows[0].full_name } });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email is already in use' });
+    return res.status(503).json({ error: 'Unable to update faculty' });
   }
 });
 

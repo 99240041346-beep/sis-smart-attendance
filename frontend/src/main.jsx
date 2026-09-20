@@ -515,7 +515,7 @@ function QRGenerator({ subjects }) {
 
 function FacultyAttendancePage({ subjects=[] }) {
   const [form,setForm]=useState({subject_id:'',section:'',room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
-  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[qrImage,setQrImage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   async function useLocation(){
     setError('');
     if(!navigator.geolocation)return setError('Geolocation is not supported by this browser.');
@@ -525,12 +525,12 @@ function FacultyAttendancePage({ subjects=[] }) {
     setBusy(true);setError('');
     try{
       const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({...form,allowed_radius_meters:Number(form.allowed_radius_meters),qr_expires_minutes:Number(form.qr_expires_minutes)})});
-      setSession(d.session);setQr(d.session.qr_token||'');
+      setSession(d.session);setQr(d.session.qr_token||'');setQrImage(await QRCode.toDataURL(d.session.qr_token||'',{width:240,margin:2}));
     }catch(e){setError(e.message)}finally{setBusy(false)}
   }
   async function close(){
     if(!session)return;
-    try{await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});setSession(null);setQr('');}catch(e){setError(e.message)}
+    try{await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});setSession(null);setQr('');setQrImage('');}catch(e){setError(e.message)}
   }
   return <section className="page-card data-workspace">
     <div className="page-heading"><div><p className="eyebrow">FACULTY • ATTENDANCE</p><h2>Start Controlled Attendance</h2><p>Faculty opens a short-lived QR session for one subject and section.</p></div><span className="status-pill">{session?'LIVE':'READY'}</span></div>
@@ -546,7 +546,7 @@ function FacultyAttendancePage({ subjects=[] }) {
       <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
     </div>:<div className="attendance-live-panel">
       <div><span className="live-dot">LIVE</span><h3>{session.subject_code||'Attendance Session'}</h3><p>Section <b>{session.section}</b> • Radius <b>{session.allowed_radius_meters} m</b> • Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></div>
-      <div className="attendance-qr">{qr?<QRCodeSVG value={qr} size={240}/>:<b>QR unavailable</b>}</div>
+      <div className="attendance-qr">{qrImage?<img src={qrImage} alt="Attendance QR"/>:<b>QR unavailable</b>}</div>
       <p className="qr-token-note">Students must scan this QR from Student → Attendance. The server validates the session, expiry, section, location and security checks.</p>
       <button className="secondary-btn" onClick={close}>CLOSE ATTENDANCE</button>
     </div>}

@@ -317,41 +317,96 @@ function StudentDashboard({ user, stats, onNavigate }) {
 }
 
 function StudentSisModule({ page, user, stats }) {
-  const descriptions = {
-    'Grievances': ['Grievances', 'Submit and track student grievances.'],
-    'Semester': ['Semester', 'Semester information, registration and academic details.'],
-    'Arrear Registration': ['Arrear Registration', 'View and manage eligible arrear registration information.'],
-    'Course Registration': ['Course Registration', 'Registered courses and semester course registration.'],
-    'OE-HSS Registration': ['OE / HSS Registration', 'Open Elective and Humanities / Social Science course registration.'],
-    'Grade': ['Grade', 'Semester grades, SGPA, CGPA and course-wise results.'],
-    'Seating & Time Table': ['Seating & Time Table', 'Examination seating and class timetable information.'],
-    'Industrial Training TPO': ['Industrial Training TPO', 'Industrial training and placement-office related student information.'],
-    'Travel History': ['Travel History', 'Student travel and campus movement records when available.'],
-    'One Credit': ['One Credit', 'One-credit course registration and records.'],
-    'Online / InternIT Courses': ['Online / InternIT Courses', 'Online, internship and IT course records.'],
-    'NonCGPA': ['NonCGPA', 'Non-CGPA academic activities and records.'],
-    'Makeup': ['Makeup', 'Make-up examination and eligible course information.'],
-    'Fees': ['Fees', 'Tuition fee payment, fee due and payment history.'],
-    'Exam Papers': ['Exam Papers', 'Examination papers and related academic resources.'],
-    'Course Feedback': ['Course Feedback', 'Course-wise faculty feedback available to students.']
+  const resourceMap = {
+    'Grievances': 'grievances',
+    'Grade': 'grades',
+    'Seating & Time Table': 'timetable',
+    'Fees': 'fees',
+    'Notifications': 'notifications'
   };
-  const item = descriptions[page] || [page, 'Student Information System module.'];
-  return (
-    <section className="sis-panel sis-module-page">
-      <div className="sis-breadcrumb">HOME / {item[0].toUpperCase()}</div>
-      <div className="sis-module-heading"><div><h2>{item[0]}</h2><p>{item[1]}</p></div><span className="sis-module-badge">SIS</span></div>
-      <div className="sis-module-grid">
-        <div className="sis-detail-card"><span>Student</span><b>{user.full_name || user.name || '—'}</b></div>
-        <div className="sis-detail-card"><span>Register Number</span><b>{user.register_no || '—'}</b></div>
-        <div className="sis-detail-card"><span>Programme</span><b>{user.department || '—'}</b></div>
-        <div className="sis-detail-card"><span>Semester / Section</span><b>{user.semester || '—'} / {user.section || '—'}</b></div>
+  const [rows,setRows]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState('');
+  const [message,setMessage]=useState('');
+  const [form,setForm]=useState({category:'Academic',subject:'',description:''});
+
+  useEffect(()=>{
+    let cancelled=false;
+    setLoading(true); setError(''); setMessage('');
+    const resource=resourceMap[page];
+    const path=resource ? '/sis/student/'+resource : '/sis/student/overview';
+    api(path).then(d=>{
+      if(cancelled) return;
+      if(resource) setRows(d.rows||[]);
+      else setRows([]);
+    }).catch(e=>{if(!cancelled)setError(e.message)}).finally(()=>{if(!cancelled)setLoading(false)});
+    return ()=>{cancelled=true};
+  },[page]);
+
+  async function submitGrievance(e){
+    e.preventDefault(); setError(''); setMessage('');
+    try{
+      await api('/sis/student/grievances',{method:'POST',body:JSON.stringify(form)});
+      setForm({category:'Academic',subject:'',description:''});
+      setMessage('Grievance submitted successfully.');
+      const d=await api('/sis/student/grievances'); setRows(d.rows||[]);
+    }catch(e){setError(e.message)}
+  }
+
+  const titles = {
+    'Grievances':['Grievances','Submit and track student grievances.'],
+    'Semester':['Semester','Semester and academic registration information.'],
+    'Arrear Registration':['Arrear Registration','Arrear registration and eligibility workspace.'],
+    'Course Registration':['Course Registration','Registered courses and semester registration workspace.'],
+    'OE-HSS Registration':['OE / HSS Registration','Open Elective and HSS registration workspace.'],
+    'Grade':['Grade','Published semester grades and grade points.'],
+    'Seating & Time Table':['Seating & Time Table','Class timetable and examination seating information.'],
+    'Industrial Training TPO':['Industrial Training TPO','Industrial training and TPO information.'],
+    'Travel History':['Travel History','Student travel history when records are available.'],
+    'One Credit':['One Credit','One-credit course records.'],
+    'Online / InternIT Courses':['Online / InternIT Courses','Online, internship and IT course records.'],
+    'NonCGPA':['NonCGPA','Non-CGPA academic activity records.'],
+    'Makeup':['Makeup','Make-up examination records.'],
+    'Fees':['Fees','Fee accounts, dues and payment status.'],
+    'Exam Papers':['Exam Papers','Examination paper resources.'],
+    'Course Feedback':['Course Feedback','Course-wise feedback workspace.']
+  };
+  const item=titles[page]||[page,'Student Information System module.'];
+  const resource=resourceMap[page];
+
+  function cell(v){
+    if(v===null||v===undefined||v==='') return '—';
+    if(typeof v==='object') return JSON.stringify(v);
+    return String(v);
+  }
+
+  return <section className="sis-panel sis-module-page">
+    <div className="sis-breadcrumb">HOME / {item[0].toUpperCase()}</div>
+    <div className="sis-module-heading"><div><h2>{item[0]}</h2><p>{item[1]}</p></div><span className="sis-module-badge">SIS</span></div>
+    <div className="sis-module-grid">
+      <div className="sis-detail-card"><span>Student</span><b>{user.full_name||user.name||'—'}</b></div>
+      <div className="sis-detail-card"><span>Register Number</span><b>{user.register_no||'—'}</b></div>
+      <div className="sis-detail-card"><span>Programme</span><b>{user.department||'—'}</b></div>
+      <div className="sis-detail-card"><span>Semester / Section</span><b>{user.semester||'—'} / {user.section||'—'}</b></div>
+    </div>
+    {error&&<div className="login-error">{error}</div>}
+    {message&&<div className="save-success">✓ {message}</div>}
+    {page==='Grievances'&&<form className="student-create-form" onSubmit={submitGrievance}>
+      <div className="student-form-title"><div><p className="eyebrow">STUDENT SERVICE</p><h3>Submit Grievance</h3></div></div>
+      <div className="student-form-grid">
+        <div className="field"><label>Category</label><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option>Academic</option><option>Examination</option><option>Attendance</option><option>Fees</option><option>Hostel</option><option>Transport</option><option>Other</option></select></div>
+        <div className="field"><label>Subject</label><input value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} required/></div>
+        <div className="field full"><label>Description</label><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} rows="4" required/></div>
       </div>
-      <div className="sis-empty-state">
-        <strong>{item[0]} data</strong>
-        <p>This screen is now structured as an SIS module. Live records will be connected to the KARE ONE backend as each academic service is implemented.</p>
-      </div>
-    </section>
-  );
+      <div className="form-actions"><button className="sis-sign-in compact">SUBMIT GRIEVANCE</button></div>
+    </form>}
+    {loading?<div className="workspace-loading">Loading SIS records...</div>:
+      resource&&rows.length>0?
+      <div className="data-table-wrap"><table className="data-table"><thead><tr>{Object.keys(rows[0]).slice(0,8).map(k=><th key={k}>{k.replaceAll('_',' ')}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={r.id||i}>{Object.keys(rows[0]).slice(0,8).map(k=><td key={k}>{cell(r[k])}</td>)}</tr>)}</tbody></table></div>:
+      resource?
+      <div className="sis-empty-state"><strong>No {item[0]} records yet</strong><p>The module is connected to the SIS database. Records will appear here as the corresponding academic/service data is entered.</p></div>:
+      <div className="sis-empty-state"><strong>{item[0]} workspace ready</strong><p>This module is connected to the SIS portal structure. Its dedicated transaction workflow will use the same student account, academic context and permissions.</p></div>}
+  </section>;
 }
 
 function FacultyDashboard({ user, stats, onNavigate, facultyStudents }) {
@@ -420,23 +475,27 @@ function FacultyDashboard({ user, stats, onNavigate, facultyStudents }) {
 }
 
 function AdminDashboard({ stats }) {
-  return (
-    <>
-      <div className="welcome-panel">
-        <div>
-          <p className="eyebrow">ADMINISTRATION</p>
-          <h2>Admin Dashboard</h2>
-          <p>System-level controls will be added progressively without changing the student/faculty attendance flow.</p>
-        </div>
-        <div className="dashboard-mark">ADM</div>
-      </div>
-      <div className="dashboard-grid">
-        <article className="info-card"><span>Active users</span><strong>{stats.users || 0}</strong><small>System accounts</small></article>
-        <article className="info-card"><span>Subjects</span><strong>API</strong><small>Management layer</small></article>
-        <article className="info-card"><span>Audit</span><strong>READY</strong><small>Security foundation</small></article>
-      </div>
-    </>
-  );
+  const counts=stats.counts||{};
+  const recent=stats.recentAudit||[];
+  return <>
+    <div className="welcome-panel">
+      <div><p className="eyebrow">ADMINISTRATION • SIS</p><h2>Administration Dashboard</h2><p>Central control for student, faculty, academic, attendance and security data.</p></div>
+      <div className="dashboard-mark">ADM</div>
+    </div>
+    <div className="dashboard-grid">
+      <article className="info-card"><span>Students</span><strong>{counts.students||0}</strong><small>Active student accounts</small></article>
+      <article className="info-card"><span>Faculty</span><strong>{counts.faculty||0}</strong><small>Active faculty accounts</small></article>
+      <article className="info-card"><span>Subjects</span><strong>{counts.subjects||0}</strong><small>Academic master data</small></article>
+      <article className="info-card"><span>Departments</span><strong>{counts.departments||0}</strong><small>Organization master data</small></article>
+    </div>
+    <section className="page-card faculty-panel">
+      <div className="panel-heading"><div><p className="eyebrow">SYSTEM ACTIVITY</p><h3>Recent administrative events</h3></div><span className="status-pill">LIVE DATA</span></div>
+      <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>
+        {recent.slice(0,8).map((r,i)=><tr key={r.id||i}><td>{r.created_at?new Date(r.created_at).toLocaleString('en-IN'):'—'}</td><td>{r.actor||'System'}</td><td><b>{r.action||'—'}</b></td><td>{r.entity_type||'—'}</td></tr>)}
+        {!recent.length&&<tr><td colSpan="4" className="empty-table">No recent audit activity.</td></tr>}
+      </tbody></table></div>
+    </section>
+  </>;
 }
 
 function StudentManagement() {

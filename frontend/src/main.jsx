@@ -139,6 +139,7 @@ function Profile({ user, onSaved }) {
     phone: user.phone || '',
     designation: user.designation || ''
   });
+  const [photoPreview, setPhotoPreview] = useState(user.profile_photo_url || '');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -152,8 +153,8 @@ function Profile({ user, onSaved }) {
     setError('');
     setMessage('');
     try {
-      const data = await api('/profile', { method: 'PATCH', body: JSON.stringify(form) });
-      const updated = data.user || { ...user, ...form, name: form.full_name };
+      const data = await api('/profile', { method: 'PATCH', body: JSON.stringify({ ...form, profile_photo_url: photoPreview || null }) });
+      const updated = data.user || { ...user, ...form, profile_photo_url: photoPreview || null, name: form.full_name };
       localStorage.setItem('kare_user', JSON.stringify(updated));
       onSaved(updated);
       setMessage('Profile updated successfully.');
@@ -172,10 +173,11 @@ function Profile({ user, onSaved }) {
           <h2>{isStudent ? 'Student Profile' : isFaculty ? 'Faculty Profile' : 'Administrator Profile'}</h2>
           <p>Keep your SIS information accurate. Attendance security will use the verified profile in later phases.</p>
         </div>
-        <div className="profile-avatar">{(form.full_name || 'K').charAt(0).toUpperCase()}</div>
+        <div className="profile-avatar-wrap">{photoPreview ? <img className="profile-avatar-image" src={photoPreview} alt="" /> : <div className="profile-avatar">{(form.full_name || 'K').charAt(0).toUpperCase()}</div>}<span className="profile-status-dot" /></div>
       </div>
 
       <form className="profile-form" onSubmit={save}>
+        <div className="profile-overview full"><div><span>ROLE</span><b>FACULTY</b></div><div><span>STATUS</span><b className="profile-active">ACTIVE</b></div><div><span>EMPLOYEE ID</span><b>{user.employee_id || 'FAC001'}</b></div></div>
         <div className="section-label">Personal information</div>
         <div className="field">
           <label>Full Name</label>
@@ -223,6 +225,11 @@ function Profile({ user, onSaved }) {
 
         {error && <div className="login-error full">{error}</div>}
         {message && <div className="save-success full">✓ {message}</div>}
+        <div className="field full profile-photo-field">
+          <label>Profile photo</label>
+          <input type="url" value={photoPreview} onChange={e => setPhotoPreview(e.target.value)} placeholder="Optional image URL for the demo profile" />
+          <small>Photo upload storage will be connected in the faculty verification phase.</small>
+        </div>
         <div className="full form-actions">
           <button className="sis-sign-in compact" disabled={saving}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</button>
         </div>

@@ -13,7 +13,7 @@ const ROLE_CONFIG = {
 };
 
 async function api(path, options = {}) {
-  const token = localStorage.getItem('kare_token');
+  const token = localStorage.getItem('kare_token') || sessionStorage.getItem('kare_token');
   const response = await fetch(`${API}${path}`, {
     ...options,
     headers: {

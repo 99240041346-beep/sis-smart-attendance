@@ -53,7 +53,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { identifier, password, role } = req.body || {};
     if (!identifier || !password || !role) return res.status(400).json({ error: 'identifier, password and role are required' });
     try {
-      const result = await query(`SELECT id, register_no, employee_id, full_name, email, password_hash, role, department, semester, section, phone, designation, profile_photo_url FROM users WHERE is_active=true AND role=$1 AND (register_no=$2 OR employee_id=$2 OR lower(email)=lower($2)) LIMIT 1`, [role, identifier]);
+      const result = await query(`SELECT id, register_no, employee_id, full_name, email, password_hash, role, department, semester, section, phone, designation, profile_photo_url, account_status FROM users WHERE is_active=true AND role=$1 AND (register_no=$2 OR employee_id=$2 OR lower(email)=lower($2)) LIMIT 1`, [role, identifier]);
       const user = result.rows[0];
       if (user && await bcrypt.compare(password, user.password_hash)) {
         const token = jwt.sign({ sub: user.id, role: user.role, name: user.full_name }, JWT_SECRET, { expiresIn: '8h' });
@@ -73,7 +73,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/me', auth, async (req, res) => {
   try {
     if (req.user.demo) { const demo = DEMO_USERS[req.user.sub]; if (!demo) return res.status(404).json({ error: 'User not found' }); const { password: _password, ...safeUser } = demo; return res.json({ user: { ...safeUser, name: demo.full_name } }); }
-    const r = await query(`SELECT id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation,profile_photo_url FROM users WHERE id=$1 AND is_active=true`, [req.user.sub]);
+    const r = await query(`SELECT id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation,profile_photo_url,account_status FROM users WHERE id=$1 AND is_active=true`, [req.user.sub]);
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });
   } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); }
@@ -130,7 +130,12 @@ app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
 
 app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { employee_id, password, full_name, email, department, designation, phone, profile_photo_url } = req.body || {};
+    const {
+      employee_id,password,full_name,email,department,designation,phone,profile_photo_url,
+      faculty_id_code,school,faculty_type,employment_status,gender,date_of_birth,nationality,
+      alternate_phone,address,qualification,specialization,research_area,joining_date,relieving_date,
+      office_room,experience_years,extra_details
+    } = req.body || {};
     if (!employee_id || !password || !full_name) return res.status(400).json({ error: 'Employee ID, password and full name are required' });
     if (String(password).length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
     if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error: 'Profile photo is too large' });
@@ -139,8 +144,9 @@ app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
       const exists = Object.values(DEMO_USERS).find(u => u.role === 'faculty' && [u.employee_id,u.email].filter(Boolean).map(v=>String(v).toLowerCase()).includes(key));
       if (exists) return res.status(409).json({ error: 'Faculty employee ID or email already exists' });
       const id = 'demo-faculty-' + crypto.randomBytes(5).toString('hex');
-      DEMO_USERS[id] = { id, register_no:null, employee_id:String(employee_id).trim(), full_name:String(full_name).trim(), email:email?String(email).trim():null, role:'faculty', department:department||null, semester:null, section:null, phone:phone||null, designation:designation||null, profile_photo_url:profile_photo_url||null, password:String(password) };
-      const { password:_password, ...safe } = DEMO_USERS[id];
+      DEMO_USERS[id] = { id, register_no:null, employee_id:String(employee_id).trim(), full_name:String(full_name).trim(), email:email?String(email).trim():null, role:'faculty', department:department||null, semester:null, section:null, phone:phone||null, designation:designation||null, profile_photo_url:profile_photo_url||null, password:String(password),
+        faculty_profile:{faculty_id_code:faculty_id_code||null,school:school||null,faculty_type:faculty_type||null,employment_status:employment_status||'active',gender:gender||null,date_of_birth:date_of_birth||null,nationality:nationality||null,alternate_phone:alternate_phone||null,address:address||null,qualification:qualification||null,specialization:specialization||null,research_area:research_area||null,joining_date:joining_date||null,relieving_date:relieving_date||null,office_room:office_room||null,experience_years:experience_years??null,photo_url:profile_photo_url||null,extra_details:extra_details||{}} };
+      const { password: _password, ...safe } = DEMO_USERS[id];
       return res.status(201).json({ faculty:{...safe,name:safe.full_name} });
     }
     const passwordHash = await bcrypt.hash(String(password), 12);
@@ -148,7 +154,12 @@ app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
       VALUES($1,$2,$3,$4,'faculty',$5,$6,$7,$8)
       RETURNING id,employee_id,full_name,email,role,department,designation,phone,profile_photo_url,is_active,created_at`,
       [String(employee_id).trim(),String(full_name).trim(),email?String(email).trim():null,passwordHash,department||null,designation||null,phone||null,profile_photo_url||null]);
-    return res.status(201).json({ faculty:{...r.rows[0],name:r.rows[0].full_name} });
+    const f=r.rows[0];
+    await query(`INSERT INTO faculty_profiles(faculty_id,faculty_id_code,school,faculty_type,employment_status,gender,date_of_birth,nationality,alternate_phone,address,qualification,specialization,research_area,joining_date,relieving_date,office_room,experience_years,photo_url,extra_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ON CONFLICT(faculty_id) DO UPDATE SET faculty_id_code=EXCLUDED.faculty_id_code,school=EXCLUDED.school,faculty_type=EXCLUDED.faculty_type,employment_status=EXCLUDED.employment_status,gender=EXCLUDED.gender,date_of_birth=EXCLUDED.date_of_birth,nationality=EXCLUDED.nationality,alternate_phone=EXCLUDED.alternate_phone,address=EXCLUDED.address,qualification=EXCLUDED.qualification,specialization=EXCLUDED.specialization,research_area=EXCLUDED.research_area,joining_date=EXCLUDED.joining_date,relieving_date=EXCLUDED.relieving_date,office_room=EXCLUDED.office_room,experience_years=EXCLUDED.experience_years,photo_url=EXCLUDED.photo_url,extra_details=EXCLUDED.extra_details,updated_at=NOW()`,
+      [f.id,faculty_id_code||null,school||null,faculty_type||null,employment_status||'active',gender||null,date_of_birth||null,nationality||null,alternate_phone||null,address||null,qualification||null,specialization||null,research_area||null,joining_date||null,relieving_date||null,office_room||null,experience_years??null,profile_photo_url||null,extra_details||{}]);
+    return res.status(201).json({ faculty:{...f,name:f.full_name} });
   } catch(err) {
     if(err.code==='23505') return res.status(409).json({error:'Employee ID or email is already in use'});
     console.error('Faculty creation failed:',err.message);
@@ -258,6 +269,77 @@ app.patch('/api/faculty/students/:id', auth, requireRole('faculty'), async (req,
     if (err.code === '23505') return res.status(409).json({ error:'Email is already in use' });
     res.status(503).json({ error:'Unable to update student' });
   }
+});
+
+/* Admin-managed student accounts and full SIS profiles */
+app.get('/api/admin/students', auth, requireRole('admin'), async (req,res)=>{
+  try {
+    if(req.user.demo) return res.json({students:Object.values(DEMO_USERS).filter(u=>u.role==='student').map(({password,...u})=>({...u,name:u.full_name}))});
+    const r=await query(`SELECT u.id,u.register_no,u.employee_id,u.full_name,u.email,u.department,u.semester,u.section,u.phone,u.profile_photo_url,u.is_active,u.account_status,u.created_at,
+      sp.application_no,sp.admission_no,sp.admission_year,sp.batch,sp.academic_year,sp.degree,sp.programme,sp.date_of_birth,sp.gender,sp.nationality,sp.religion,sp.community,sp.caste,sp.blood_group,sp.aadhaar_last4,sp.nad_id,
+      sp.address,sp.city,sp.district,sp.state,sp.pincode,sp.father_name,sp.mother_name,sp.parent_name,sp.parent_phone,sp.parent_email,sp.emergency_contact_name,sp.emergency_contact_phone,
+      sp.hosteller,sp.hostel_name,sp.hostel_room,sp.transport_required,sp.transport_route,sp.faculty_advisor_id,sp.program_id,sp.photo_url,sp.extra_details,
+      fa.full_name AS faculty_advisor_name
+      FROM users u LEFT JOIN student_profiles sp ON sp.student_id=u.id
+      LEFT JOIN users fa ON fa.id=sp.faculty_advisor_id
+      WHERE u.role='student' ORDER BY u.register_no,u.full_name`);
+    res.json({students:r.rows.map(u=>({...u,name:u.full_name,profile_photo_url:u.profile_photo_url||u.photo_url}))});
+  } catch(err){console.error(err);res.status(503).json({error:'Student service unavailable'});}
+});
+
+app.post('/api/admin/students', auth, requireRole('admin'), async (req,res)=>{
+  try{
+    const {
+      register_no,password,full_name,email,department,semester,section,phone,profile_photo_url,
+      application_no,admission_no,admission_year,batch,academic_year,degree,programme,date_of_birth,gender,
+      nationality,religion,community,caste,blood_group,aadhaar_last4,nad_id,address,city,district,state,pincode,
+      father_name,mother_name,parent_name,parent_phone,parent_email,emergency_contact_name,emergency_contact_phone,
+      hosteller,hostel_name,hostel_room,transport_required,transport_route,faculty_advisor_id,program_id,extra_details
+    }=req.body||{};
+    if(!register_no||!password||!full_name)return res.status(400).json({error:'Register number, password and full name are required'});
+    if(String(password).length<4)return res.status(400).json({error:'Password must be at least 4 characters'});
+    if(String(aadhaar_last4||'').length>4)return res.status(400).json({error:'Aadhaar field accepts only the last 4 digits'});
+    if(String(profile_photo_url||'').length>700000)return res.status(400).json({error:'Profile photo is too large'});
+    if(req.user.demo){
+      const key=String(register_no).trim().toLowerCase();
+      const exists=Object.values(DEMO_USERS).find(u=>u.role==='student'&&[u.register_no,u.email].filter(Boolean).map(v=>String(v).toLowerCase()).includes(key));
+      if(exists)return res.status(409).json({error:'Register number or email already exists'});
+      const id='demo-student-'+crypto.randomBytes(5).toString('hex');
+      DEMO_USERS[id]={id,register_no:String(register_no).trim(),employee_id:null,full_name:String(full_name).trim(),email:email?String(email).trim():null,role:'student',department:department||null,semester:semester||null,section:section||null,phone:phone||null,profile_photo_url:profile_photo_url||null,password:String(password),
+        student_profile:{application_no:application_no||null,admission_no:admission_no||null,admission_year:admission_year??null,batch:batch||null,academic_year:academic_year||null,degree:degree||null,programme:programme||null,date_of_birth:date_of_birth||null,gender:gender||null,nationality:nationality||null,religion:religion||null,community:community||null,caste:caste||null,blood_group:blood_group||null,aadhaar_last4:aadhaar_last4||null,nad_id:nad_id||null,address:address||null,city:city||null,district:district||null,state:state||null,pincode:pincode||null,father_name:father_name||null,mother_name:mother_name||null,parent_name:parent_name||null,parent_phone:parent_phone||null,parent_email:parent_email||null,emergency_contact_name:emergency_contact_name||null,emergency_contact_phone:emergency_contact_phone||null,hosteller:Boolean(hosteller),hostel_name:hostel_name||null,hostel_room:hostel_room||null,transport_required:Boolean(transport_required),transport_route:transport_route||null,faculty_advisor_id:faculty_advisor_id||null,program_id:program_id||null,photo_url:profile_photo_url||null,extra_details:extra_details||{}}};
+      const {password:_password,...safe}=DEMO_USERS[id]; return res.status(201).json({student:{...safe,name:safe.full_name}});
+    }
+    const passwordHash=await bcrypt.hash(String(password),12);
+    const r=await query(`INSERT INTO users(register_no,full_name,email,password_hash,role,department,semester,section,phone,profile_photo_url)
+      VALUES($1,$2,$3,$4,'student',$5,$6,$7,$8,$9)
+      RETURNING id,register_no,full_name,email,role,department,semester,section,phone,profile_photo_url,is_active,account_status,created_at`,
+      [String(register_no).trim(),String(full_name).trim(),email?String(email).trim():null,passwordHash,department||null,semester||null,section||null,phone||null,profile_photo_url||null]);
+    const s=r.rows[0];
+    await query(`INSERT INTO student_profiles(student_id,application_no,admission_no,admission_year,batch,academic_year,degree,programme,date_of_birth,gender,nationality,religion,community,caste,blood_group,aadhaar_last4,nad_id,address,city,district,state,pincode,father_name,mother_name,parent_name,parent_phone,parent_email,emergency_contact_name,emergency_contact_phone,hosteller,hostel_name,hostel_room,transport_required,transport_route,faculty_advisor_id,program_id,photo_url,extra_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
+      ON CONFLICT(student_id) DO UPDATE SET application_no=EXCLUDED.application_no,admission_no=EXCLUDED.admission_no,admission_year=EXCLUDED.admission_year,batch=EXCLUDED.batch,academic_year=EXCLUDED.academic_year,degree=EXCLUDED.degree,programme=EXCLUDED.programme,date_of_birth=EXCLUDED.date_of_birth,gender=EXCLUDED.gender,nationality=EXCLUDED.nationality,religion=EXCLUDED.religion,community=EXCLUDED.community,caste=EXCLUDED.caste,blood_group=EXCLUDED.blood_group,aadhaar_last4=EXCLUDED.aadhaar_last4,nad_id=EXCLUDED.nad_id,address=EXCLUDED.address,city=EXCLUDED.city,district=EXCLUDED.district,state=EXCLUDED.state,pincode=EXCLUDED.pincode,father_name=EXCLUDED.father_name,mother_name=EXCLUDED.mother_name,parent_name=EXCLUDED.parent_name,parent_phone=EXCLUDED.parent_phone,parent_email=EXCLUDED.parent_email,emergency_contact_name=EXCLUDED.emergency_contact_name,emergency_contact_phone=EXCLUDED.emergency_contact_phone,hosteller=EXCLUDED.hosteller,hostel_name=EXCLUDED.hostel_name,hostel_room=EXCLUDED.hostel_room,transport_required=EXCLUDED.transport_required,transport_route=EXCLUDED.transport_route,faculty_advisor_id=EXCLUDED.faculty_advisor_id,program_id=EXCLUDED.program_id,photo_url=EXCLUDED.photo_url,extra_details=EXCLUDED.extra_details,updated_at=NOW()`,
+      [s.id,application_no||null,admission_no||null,admission_year??null,batch||null,academic_year||null,degree||null,programme||null,date_of_birth||null,gender||null,nationality||null,religion||null,community||null,caste||null,blood_group||null,aadhaar_last4||null,nad_id||null,address||null,city||null,district||null,state||null,pincode||null,father_name||null,mother_name||null,parent_name||null,parent_phone||null,parent_email||null,emergency_contact_name||null,emergency_contact_phone||null,Boolean(hosteller),hostel_name||null,hostel_room||null,Boolean(transport_required),transport_route||null,faculty_advisor_id||null,program_id||null,profile_photo_url||null,extra_details||{}]);
+    res.status(201).json({student:{...s,name:s.full_name}});
+  }catch(err){console.error('Admin student creation failed:',err.message);if(err.code==='23505')return res.status(409).json({error:'Register number or email is already in use'});res.status(503).json({error:'Unable to create student'});}
+});
+
+app.patch('/api/admin/students/:id', auth, requireRole('admin'), async (req,res)=>{
+  try{
+    const body=req.body||{};
+    const fields=['full_name','email','department','semester','section','phone','profile_photo_url'];
+    if(!body.full_name||!String(body.full_name).trim())return res.status(400).json({error:'Full name is required'});
+    if(String(body.aadhaar_last4||'').length>4)return res.status(400).json({error:'Aadhaar field accepts only the last 4 digits'});
+    const r=await query(`UPDATE users SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,profile_photo_url=$7,updated_at=NOW()
+      WHERE id=$8 AND role='student' RETURNING id,register_no,full_name,email,role,department,semester,section,phone,profile_photo_url,is_active,account_status`,
+      [String(body.full_name).trim(),body.email||null,body.department||null,body.semester||null,body.section||null,body.phone||null,body.profile_photo_url||null,req.params.id]);
+    if(!r.rows[0])return res.status(404).json({error:'Student not found'});
+    const p={...body};
+    await query(`INSERT INTO student_profiles(student_id,application_no,admission_no,admission_year,batch,academic_year,degree,programme,date_of_birth,gender,nationality,religion,community,caste,blood_group,aadhaar_last4,nad_id,address,city,district,state,pincode,father_name,mother_name,parent_name,parent_phone,parent_email,emergency_contact_name,emergency_contact_phone,hosteller,hostel_name,hostel_room,transport_required,transport_route,faculty_advisor_id,program_id,photo_url,extra_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
+      ON CONFLICT(student_id) DO UPDATE SET application_no=EXCLUDED.application_no,admission_no=EXCLUDED.admission_no,admission_year=EXCLUDED.admission_year,batch=EXCLUDED.batch,academic_year=EXCLUDED.academic_year,degree=EXCLUDED.degree,programme=EXCLUDED.programme,date_of_birth=EXCLUDED.date_of_birth,gender=EXCLUDED.gender,nationality=EXCLUDED.nationality,religion=EXCLUDED.religion,community=EXCLUDED.community,caste=EXCLUDED.caste,blood_group=EXCLUDED.blood_group,aadhaar_last4=EXCLUDED.aadhaar_last4,nad_id=EXCLUDED.nad_id,address=EXCLUDED.address,city=EXCLUDED.city,district=EXCLUDED.district,state=EXCLUDED.state,pincode=EXCLUDED.pincode,father_name=EXCLUDED.father_name,mother_name=EXCLUDED.mother_name,parent_name=EXCLUDED.parent_name,parent_phone=EXCLUDED.parent_phone,parent_email=EXCLUDED.parent_email,emergency_contact_name=EXCLUDED.emergency_contact_name,emergency_contact_phone=EXCLUDED.emergency_contact_phone,hosteller=EXCLUDED.hosteller,hostel_name=EXCLUDED.hostel_name,hostel_room=EXCLUDED.hostel_room,transport_required=EXCLUDED.transport_required,transport_route=EXCLUDED.transport_route,faculty_advisor_id=EXCLUDED.faculty_advisor_id,program_id=EXCLUDED.program_id,photo_url=EXCLUDED.photo_url,extra_details=EXCLUDED.extra_details,updated_at=NOW()`,
+      [req.params.id,p.application_no||null,p.admission_no||null,p.admission_year??null,p.batch||null,p.academic_year||null,p.degree||null,p.programme||null,p.date_of_birth||null,p.gender||null,p.nationality||null,p.religion||null,p.community||null,p.caste||null,p.blood_group||null,p.aadhaar_last4||null,p.nad_id||null,p.address||null,p.city||null,p.district||null,p.state||null,p.pincode||null,p.father_name||null,p.mother_name||null,p.parent_name||null,p.parent_phone||null,p.parent_email||null,p.emergency_contact_name||null,p.emergency_contact_phone||null,Boolean(p.hosteller),p.hostel_name||null,p.hostel_room||null,Boolean(p.transport_required),p.transport_route||null,p.faculty_advisor_id||null,p.program_id||null,p.profile_photo_url||null,p.extra_details||{}]);
+    res.json({student:{...r.rows[0],name:r.rows[0].full_name}});
+  }catch(err){console.error(err);if(err.code==='23505')return res.status(409).json({error:'Email is already in use'});res.status(503).json({error:'Unable to update student'});}
 });
 
 app.get('/api/subjects', auth, async (_req, res) => { try { const r = await query(`SELECT id,code,name,department,semester FROM subjects ORDER BY code`); res.json({ subjects: r.rows }); } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); } });

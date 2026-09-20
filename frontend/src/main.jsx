@@ -575,8 +575,17 @@ function QRGenerator({ subjects }) {
 }
 
 function FacultyAttendancePage({ subjects=[] }) {
-  const [form,setForm]=useState({subject_id:'',section:'',room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
-  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[qrImage,setQrImage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [form,setForm]=useState({offering_id:'',section:'',room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
+  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[qrImage,setQrImage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[semester,setSemester]=useState('');
+  const offerings=Array.isArray(subjects)?subjects:[];
+  const semesters=[...new Set(offerings.map(s=>String(s.semester||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const filteredOfferings=offerings.filter(s=>!semester||String(s.semester)===semester);
+  const selected=offerings.find(s=>String(s.offering_id||s.id)===String(form.offering_id));
+
+  function chooseOffering(id){
+    const item=offerings.find(s=>String(s.offering_id||s.id)===String(id));
+    setForm(x=>({...x,offering_id:id,section:item?.section||'',room:item?.room||''}));
+  }
   async function useLocation(){
     setError('');
     if(!navigator.geolocation)return setError('Geolocation is not supported by this browser.');
@@ -585,7 +594,14 @@ function FacultyAttendancePage({ subjects=[] }) {
   async function start(){
     setBusy(true);setError('');
     try{
-      const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({...form,allowed_radius_meters:Number(form.allowed_radius_meters),qr_expires_minutes:Number(form.qr_expires_minutes)})});
+      if(!selected)throw new Error('Select one of your assigned semester course offerings.');
+      const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({
+        subjectId:form.offering_id,
+        section:form.section,
+        room:form.room,
+        allowed_radius_meters:Number(form.allowed_radius_meters),
+        qr_expires_minutes:Number(form.qr_expires_minutes)
+      })});
       setSession(d.session);setQr(d.qrToken||d.session.qr_token||'');setQrImage(await QRCode.toDataURL(d.qrToken||d.session.qr_token||'',{width:240,margin:2}));
     }catch(e){setError(e.message)}finally{setBusy(false)}
   }
@@ -594,24 +610,29 @@ function FacultyAttendancePage({ subjects=[] }) {
     try{await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});setSession(null);setQr('');setQrImage('');}catch(e){setError(e.message)}
   }
   return <section className="page-card data-workspace">
-    <div className="page-heading"><div><p className="eyebrow">FACULTY • ATTENDANCE</p><h2>Start Controlled Attendance</h2><p>Faculty opens a short-lived QR session for one subject and section.</p></div><span className="status-pill">{session?'LIVE':'READY'}</span></div>
+    <div className="page-heading"><div><p className="eyebrow">FACULTY • ATTENDANCE</p><h2>Start Controlled Attendance</h2><p>Choose the semester and exact course offering. Attendance is permanently tied to the selected semester, section and academic year.</p></div><span className="status-pill">{session?'LIVE':'READY'}</span></div>
     {error&&<div className="login-error">{error}</div>}
-    {!session?<div className="attendance-start-grid">
-      <div className="field"><label>Subject</label><select value={form.subject_id} onChange={e=>setForm({...form,subject_id:e.target.value})}><option value="">Select subject</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}</select></div>
-      <div className="field"><label>Section</label><input value={form.section} onChange={e=>setForm({...form,section:e.target.value})} placeholder="S19"/></div>
-      <div className="field"><label>Room</label><input value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Block / Room"/></div>
-      <div className="field"><label>Allowed radius (meters)</label><input type="number" min="10" value={form.allowed_radius_meters} onChange={e=>setForm({...form,allowed_radius_meters:e.target.value})}/></div>
-      <div className="field"><label>QR validity (minutes)</label><input type="number" min="1" max="30" value={form.qr_expires_minutes} onChange={e=>setForm({...form,qr_expires_minutes:e.target.value})}/></div>
-      <div className="field"><label>Latitude</label><input value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})} placeholder="Faculty location"/></div>
-      <div className="field"><label>Longitude</label><input value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})} placeholder="Faculty location"/></div>
-      <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
-    </div>:<div className="attendance-live-panel">
-      <div><span className="live-dot">LIVE</span><h3>{session.subject_code||'Attendance Session'}</h3><p>Section <b>{session.section}</b> • Radius <b>{session.allowed_radius_meters} m</b> • Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></div>
+    {!session?<>
+      <div className="master-data-banner"><strong>Faculty workload</strong><span>Semester → Subject → Section → Academic Year</span><small>Changing semester only changes the visible assignments. Previous attendance is never deleted.</small></div>
+      <div className="attendance-start-grid">
+        <div className="field"><label>Semester</label><select value={semester} onChange={e=>{setSemester(e.target.value);setForm(x=>({...x,offering_id:'',section:'',room:''}))}}><option value="">All assigned semesters</option>{semesters.map(n=><option key={n} value={n}>Semester {n}</option>)}</select></div>
+        <div className="field"><label>Assigned Subject / Section</label><select value={form.offering_id} onChange={e=>chooseOffering(e.target.value)}><option value="">Select assigned course</option>{filteredOfferings.map(s=><option key={s.offering_id||s.id} value={s.offering_id||s.id}>{s.code} — {s.name} • Sem {s.semester} • {s.section||'All'} • {s.academic_year||'Current'}</option>)}</select></div>
+        <div className="field"><label>Section</label><input value={form.section} readOnly placeholder="Auto from assignment"/></div>
+        <div className="field"><label>Academic Year</label><input value={selected?.academic_year||''} readOnly placeholder="Auto from assignment"/></div>
+        <div className="field"><label>Room</label><input value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Block / Room"/></div>
+        <div className="field"><label>Allowed radius (meters)</label><input type="number" min="10" value={form.allowed_radius_meters} onChange={e=>setForm({...form,allowed_radius_meters:e.target.value})}/></div>
+        <div className="field"><label>QR validity (minutes)</label><input type="number" min="1" max="30" value={form.qr_expires_minutes} onChange={e=>setForm({...form,qr_expires_minutes:e.target.value})}/></div>
+        <div className="field"><label>Latitude</label><input value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})} placeholder="Faculty location"/></div>
+        <div className="field"><label>Longitude</label><input value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})} placeholder="Faculty location"/></div>
+        <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
+      </div>
+      <div className="form-actions"><button className="sis-sign-in compact" disabled={busy||!selected} onClick={start}>{busy?'STARTING...':'START ATTENDANCE'}</button></div>
+    </>:<div className="attendance-live-panel">
+      <div><span className="live-dot">LIVE</span><h3>{session.subject_code||'Attendance Session'}</h3><p>Semester <b>{session.semester||'—'}</b> • Section <b>{session.section||'All'}</b> • Academic Year <b>{session.academic_year||'—'}</b> • Radius <b>{session.allowed_radius_meters} m</b></p><p>Room <b>{session.room||'Not set'}</b> • Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></div>
       <div className="attendance-qr">{qrImage?<img src={qrImage} alt="Attendance QR"/>:<b>QR unavailable</b>}</div>
-      <p className="qr-token-note">Students must scan this QR from Student → Attendance. The server validates the session, expiry, section, location and security checks.</p>
+      <p className="qr-token-note">Students must belong to the session section. The server validates the exact course offering, semester, section, expiry, location and device security.</p>
       <button className="secondary-btn" onClick={close}>CLOSE ATTENDANCE</button>
     </div>}
-    {!session&&<div className="form-actions"><button className="sis-sign-in compact" disabled={busy} onClick={start}>{busy?'STARTING...':'START ATTENDANCE'}</button></div>}
   </section>;
 }
 

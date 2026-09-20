@@ -14,8 +14,12 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: '1mb' }));
 
 const DEMO_USERS = {
-  student: { id: 'demo-student', register_no: 'student', employee_id: null, full_name: 'Demo Student', email: 'student@kare.edu', role: 'student', department: 'Demo Department', semester: 1, section: 'A', password: 'student' },
-  faculty: { id: 'demo-faculty', register_no: null, employee_id: 'FAC001', full_name: 'Dr. Demo Faculty', email: 'faculty@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00001', designation: 'Assistant Professor', password: 'faculty', login_aliases: ['faculty'] },
+  student: { id: 'demo-student', register_no: 'student', employee_id: null, full_name: 'Demo Student', email: 'student@kare.edu', role: 'student', department: 'Computer Science and Engineering', semester: 1, section: 'S1', password: 'student' },
+  faculty1: { id: 'demo-faculty-1', register_no: null, employee_id: 'FAC001', full_name: 'Dr. Arjun Kumar', email: 'faculty1@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00001', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty1'] },
+  faculty2: { id: 'demo-faculty-2', register_no: null, employee_id: 'FAC002', full_name: 'Dr. Priya Nair', email: 'faculty2@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00002', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty2'] },
+  faculty3: { id: 'demo-faculty-3', register_no: null, employee_id: 'FAC003', full_name: 'Prof. Rahul Varma', email: 'faculty3@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00003', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty3'] },
+  faculty4: { id: 'demo-faculty-4', register_no: null, employee_id: 'FAC004', full_name: 'Dr. Meena Krishnan', email: 'faculty4@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00004', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty4'] },
+  faculty5: { id: 'demo-faculty-5', register_no: null, employee_id: 'FAC005', full_name: 'Prof. Suresh Babu', email: 'faculty5@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00005', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty5'] },
   admin: { id: 'demo-admin', register_no: null, employee_id: 'admin', full_name: 'Demo Administrator', email: 'admin@kare.edu', role: 'admin', department: null, semester: null, section: null, password: 'admin' }
 };
 
@@ -427,7 +431,10 @@ app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,re
     const [f,s,c,o]=await Promise.all([
       query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1`,[req.user.sub]),
       query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[(await query('SELECT department FROM users WHERE id=$1',[req.user.sub])).rows[0]?.department||null]),
-      query(`SELECT s.id,s.code,s.name,s.department,s.semester FROM faculty_subjects fs JOIN subjects s ON s.id=fs.subject_id WHERE fs.faculty_id=$1 ORDER BY s.code`,[req.user.sub]),
+      query(`SELECT DISTINCT o.id AS offering_id,s.id,s.code,s.name,s.department,o.semester,o.section,o.academic_year,o.room
+        FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
+        WHERE o.faculty_id=$1 AND o.active=true
+        ORDER BY o.semester::int,s.code,o.section`,[req.user.sub]),
       query(`SELECT id,subject_id,section,room,status,started_at,qr_expires_at FROM attendance_sessions WHERE faculty_id=$1 AND status='open' ORDER BY started_at DESC`,[req.user.sub])
     ]);
     res.json({faculty:f.rows[0],students:s.rows[0]?.count||0,subjects:c.rows,openSessions:o.rows});
@@ -474,14 +481,31 @@ app.post('/api/sis/faculty/attendance/sessions', auth, requireRole('faculty'), a
     if(!subjectId)return res.status(400).json({error:'subjectId is required'});
     if((latitude===null)!==(longitude===null))return res.status(400).json({error:'Latitude and longitude must be provided together'});
     if(latitude!==null&&(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180))return res.status(400).json({error:'Invalid faculty location'});
-    const subject=await query('SELECT id,code,name FROM subjects WHERE id=$1',[subjectId]);
-    if(!subject.rows[0])return res.status(404).json({error:'Subject not found'});
+    const offering=await query(`SELECT o.id,o.subject_id,o.faculty_id,o.semester,o.section,o.academic_year,o.room,s.code,s.name
+      FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
+      WHERE o.id=$1 AND o.faculty_id=$2 AND o.active=true LIMIT 1`,[subjectId,req.user.sub]);
+    let selectedOffering=offering.rows[0];
+    // Backward-compatible subject selection: if the client sends a subject id, choose the
+    // current active offering for this faculty and use its semester/section defaults.
+    if(!selectedOffering){
+      const fallback=await query(`SELECT o.id,o.subject_id,o.faculty_id,o.semester,o.section,o.academic_year,o.room,s.code,s.name
+        FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
+        WHERE o.subject_id=$1 AND o.faculty_id=$2 AND o.active=true
+        ORDER BY o.semester::int,o.section LIMIT 1`,[subjectId,req.user.sub]);
+      selectedOffering=fallback.rows[0];
+    }
+    if(!selectedOffering)return res.status(403).json({error:'This subject is not assigned to your faculty account.'});
+    const finalSection=section||selectedOffering.section||null;
+    if(section && selectedOffering.section && section.toLowerCase()!==String(selectedOffering.section).toLowerCase())return res.status(403).json({error:'Selected section does not match your assigned course offering.'});
+    const finalSemester=selectedOffering.semester;
+    const finalAcademicYear=selectedOffering.academic_year;
+    const finalRoom=room||selectedOffering.room||null;
     const token=crypto.randomBytes(32).toString('base64url');
     const exp=new Date(Date.now()+minutes*60*1000);
-    const r=await query(`INSERT INTO attendance_sessions(faculty_id,subject_id,section,room,qr_token_hash,qr_expires_at,latitude,longitude,allowed_radius_meters)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,subject_id,section,room,qr_expires_at,status,started_at,latitude,longitude,allowed_radius_meters`,
-      [req.user.sub,subjectId,section,room,hashToken(token),exp,latitude,longitude,allowedRadiusMeters]);
-    const session={...r.rows[0],subject_code:subject.rows[0].code,subject_name:subject.rows[0].name,qr_token:token};
+    const r=await query(`INSERT INTO attendance_sessions(faculty_id,subject_id,offering_id,semester,academic_year,section,room,qr_token_hash,qr_expires_at,latitude,longitude,allowed_radius_meters)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id,subject_id,offering_id,semester,academic_year,section,room,qr_expires_at,status,started_at,latitude,longitude,allowed_radius_meters`,
+      [req.user.sub,selectedOffering.subject_id,selectedOffering.id,finalSemester,finalAcademicYear,finalSection,finalRoom,hashToken(token),exp,latitude,longitude,allowedRadiusMeters]);
+    const session={...r.rows[0],subject_code:selectedOffering.code,subject_name:selectedOffering.name,qr_token:token};
     res.status(201).json({session,qrToken:token});
   } catch(err){console.error(err);res.status(503).json({error:'Unable to start secure attendance'});}
 });
@@ -490,7 +514,7 @@ app.post('/api/sis/attendance/verify', auth, requireRole('student'), async (req,
   try {
     const {qrToken,latitude,longitude,deviceFingerprint,faceMatchStatus='not_checked',livenessStatus='not_checked'}=req.body||{};
     if(!qrToken)return res.status(400).json({error:'qrToken is required'});
-    const s=await query(`SELECT id,latitude,longitude,allowed_radius_meters FROM attendance_sessions WHERE qr_token_hash=$1 AND status='open' AND qr_expires_at>NOW() LIMIT 1`,[hashToken(qrToken)]);
+    const s=await query(`SELECT id,offering_id,semester,academic_year,section,latitude,longitude,allowed_radius_meters FROM attendance_sessions WHERE qr_token_hash=$1 AND status='open' AND qr_expires_at>NOW() LIMIT 1`,[hashToken(qrToken)]);
     if(!s.rows[0])return res.status(400).json({error:'QR expired, closed or invalid'});
     const session=s.rows[0];
     const student=await query("SELECT section FROM users WHERE id=$1 AND role='student' AND is_active=true",[req.user.sub]);

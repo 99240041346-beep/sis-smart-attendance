@@ -15,14 +15,14 @@ app.use(express.json({ limit: '1mb' }));
 
 const DEMO_USERS = {
   student: { id: 'demo-student', register_no: 'student', employee_id: null, full_name: 'Demo Student', email: 'student@kare.edu', role: 'student', department: 'Demo Department', semester: 1, section: 'A', password: 'student' },
-  faculty: { id: 'demo-faculty', register_no: null, employee_id: 'faculty', full_name: 'Demo Faculty', email: 'faculty@kare.edu', role: 'faculty', department: 'Demo Department', semester: null, section: null, password: 'faculty' },
+  faculty: { id: 'demo-faculty', register_no: null, employee_id: 'FAC001', full_name: 'Dr. Demo Faculty', email: 'faculty@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00001', designation: 'Assistant Professor', password: 'faculty', login_aliases: ['faculty'] },
   admin: { id: 'demo-admin', register_no: null, employee_id: 'admin', full_name: 'Demo Administrator', email: 'admin@kare.edu', role: 'admin', department: null, semester: null, section: null, password: 'admin' }
 };
 
 function demoLogin(identifier, password, role) {
   const user = DEMO_USERS[role];
   if (!user || user.password !== password) return null;
-  const accepted = [user.register_no, user.employee_id, user.email].filter(Boolean).map(String).map(v => v.toLowerCase());
+  const accepted = [user.register_no, user.employee_id, user.email, ...(user.login_aliases || [])].filter(Boolean).map(String).map(v => v.toLowerCase());
   if (!accepted.includes(String(identifier).toLowerCase())) return null;
   return user;
 }

@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import { Html5Qrcode } from 'html5-qrcode';
 import './style.css';
 import AdminStudentManagement from './AdminStudentManagement';
-import AdminFacultyManagement from './AdminFacultyManagement';
+import AdminFacultyFIS from './AdminFacultyManagement';
 
 const API = (import.meta.env.VITE_API_URL || 'https://kare-one-api.onrender.com/api').replace(/\/$/, '');
 
@@ -682,7 +682,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'student' && page !== 'Dashboard') return <StudentSisModule page={page} user={user} stats={stats} />;
     if (user.role === 'admin' && page === 'Students') return <AdminStudentManagement />;
-    if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyManagement />;
+    if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyFIS />;
     if (user.role === 'admin' && page === 'Subjects') return <AdminSubjectsPage />;
     if (user.role === 'admin' && page === 'Departments') return <AdminDepartmentsPage />;
     if (user.role === 'admin' && page === 'Audit Logs') return <AdminAuditPage />;

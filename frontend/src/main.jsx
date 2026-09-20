@@ -709,14 +709,30 @@ function FacultyLivePage() {
 }
 
 function AdminSubjectsPage() {
-  const empty={code:'',name:'',department:'',semester:''}; const [rows,setRows]=useState([]),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
-  const load=()=>api('/subjects').then(d=>setRows(d.subjects||[])).catch(e=>setError(e.message));
+  const empty={code:'',name:'',department:'',semester:''};
+  const [rows,setRows]=useState([]),[departments,setDepartments]=useState([]),[form,setForm]=useState(empty);
+  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[search,setSearch]=useState(''),[filterDept,setFilterDept]=useState(''),[filterSem,setFilterSem]=useState('');
+  const load=()=>Promise.all([api('/subjects'),api('/sis/admin/departments')]).then(([s,d])=>{setRows(s.subjects||[]);setDepartments(d.departments||[])}).catch(e=>setError(e.message));
   useEffect(()=>{load();},[]);
   async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{await api('/subjects',{method:'POST',body:JSON.stringify(form)});setForm(empty);setMessage('Subject created successfully.');load();}catch(e){setError(e.message)}finally{setBusy(false)}}
-  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMIC MASTER DATA</p><h2>Subjects</h2><p>Create and maintain the subject catalogue used by faculty attendance sessions.</p></div></div>
-    <form className="inline-create-form" onSubmit={save}><input placeholder="Code" value={form.code} onChange={e=>setForm({...form,code:e.target.value})} required/><input placeholder="Subject name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/><input placeholder="Department" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/><input placeholder="Semester" value={form.semester} onChange={e=>setForm({...form,semester:e.target.value})}/><button className="sis-sign-in compact" disabled={busy}>{busy?'ADDING...':'ADD SUBJECT'}</button></form>
-    {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
-    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Semester</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.department||'—'}</td><td>{r.semester||'—'}</td></tr>)}{!rows.length&&<tr><td colSpan="4" className="empty-table">No subjects found.</td></tr>}</tbody></table></div>
+  const filtered=rows.filter(r=>{
+    const q=search.trim().toLowerCase();
+    return (!q||[r.code,r.name,r.department,r.semester].some(v=>String(v||'').toLowerCase().includes(q))) &&
+      (!filterDept||r.department===filterDept) && (!filterSem||String(r.semester)===filterSem);
+  });
+  return <section className="page-card data-workspace">
+    <div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMIC MASTER DATA</p><h2>Subjects by Department & Semester</h2><p>Create the course catalogue used by student registration, faculty classes, timetable and attendance.</p></div></div>
+    <div className="master-data-banner"><strong>Semester structure</strong><span>Sem 1 → Sem 8</span><small>Admin can add programme-specific subjects; the database keeps department and semester with every subject.</small></div>
+    <form className="inline-create-form" onSubmit={save}>
+      <input placeholder="Subject code" value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} required/>
+      <input placeholder="Subject name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>
+      <select value={form.department} onChange={e=>setForm({...form,department:e.target.value})} required><option value="">Select department</option>{departments.map(d=><option key={d.code} value={d.code}>{d.code} — {d.name}</option>)}</select>
+      <select value={form.semester} onChange={e=>setForm({...form,semester:e.target.value})} required><option value="">Select semester</option>{[1,2,3,4,5,6,7,8].map(n=><option key={n} value={n}>Semester {n}</option>)}</select>
+      <button className="sis-sign-in compact" disabled={busy}>{busy?'ADDING...':'ADD SUBJECT'}</button>
+    </form>
+    {message&&<div className="save-success">✓ {message}</div>}{error&&<div className="login-error">{error}</div>}
+    <div className="student-list-toolbar"><div><b>{filtered.length}</b> subject records</div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search code, subject, department..."/><select value={filterDept} onChange={e=>setFilterDept(e.target.value)}><option value="">All departments</option>{departments.map(d=><option key={d.code} value={d.code}>{d.code}</option>)}</select><select value={filterSem} onChange={e=>setFilterSem(e.target.value)}><option value="">All semesters</option>{[1,2,3,4,5,6,7,8].map(n=><option key={n} value={n}>Sem {n}</option>)}</select></div>
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Subject</th><th>Department</th><th>Semester</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.department||'—'}</td><td><span className="status-pill">SEM {r.semester||'—'}</span></td></tr>)}{!filtered.length&&<tr><td colSpan="4" className="empty-table">No subjects match the selected department/semester.</td></tr>}</tbody></table></div>
   </section>;
 }
 

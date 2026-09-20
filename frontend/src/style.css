@@ -422,3 +422,9 @@ button, input, select { font: inherit; }
 @media(max-width:720px){.live-session-grid,.report-summary,.inline-create-form{grid-template-columns:1fr}}
 
 .sis-quick-attendance{margin-top:12px;border:1px solid #b9c9d9;background:#f4f8fb;color:#174f86;border-radius:4px;padding:9px 12px;font-size:10px;font-weight:800;letter-spacing:.04em;cursor:pointer}.sis-quick-attendance:hover{background:#e8f1f8}
+
+
+/* Complete SIS/FIS administration forms */
+.student-form-grid .field.wide,.student-create-form>.field.wide{grid-column:1/-1}
+.student-create-form textarea{width:100%;resize:vertical;min-height:82px;border:1px solid #c9d5e0;border-radius:4px;padding:10px 11px;font:inherit;background:#fff}
+.student-create-form .section-label{grid-column:1/-1;margin-top:10px}

@@ -128,6 +128,34 @@ app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
   } catch (_err) { return res.status(503).json({ error: 'Faculty service unavailable' }); }
 });
 
+app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const { employee_id, password, full_name, email, department, designation, phone, profile_photo_url } = req.body || {};
+    if (!employee_id || !password || !full_name) return res.status(400).json({ error: 'Employee ID, password and full name are required' });
+    if (String(password).length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error: 'Profile photo is too large' });
+    if (req.user.demo) {
+      const key = String(employee_id).trim().toLowerCase();
+      const exists = Object.values(DEMO_USERS).find(u => u.role === 'faculty' && [u.employee_id,u.email].filter(Boolean).map(v=>String(v).toLowerCase()).includes(key));
+      if (exists) return res.status(409).json({ error: 'Faculty employee ID or email already exists' });
+      const id = 'demo-faculty-' + crypto.randomBytes(5).toString('hex');
+      DEMO_USERS[id] = { id, register_no:null, employee_id:String(employee_id).trim(), full_name:String(full_name).trim(), email:email?String(email).trim():null, role:'faculty', department:department||null, semester:null, section:null, phone:phone||null, designation:designation||null, profile_photo_url:profile_photo_url||null, password:String(password) };
+      const { password:_password, ...safe } = DEMO_USERS[id];
+      return res.status(201).json({ faculty:{...safe,name:safe.full_name} });
+    }
+    const passwordHash = await bcrypt.hash(String(password), 12);
+    const r = await query(`INSERT INTO users(employee_id,full_name,email,password_hash,role,department,designation,phone,profile_photo_url)
+      VALUES($1,$2,$3,$4,'faculty',$5,$6,$7,$8)
+      RETURNING id,employee_id,full_name,email,role,department,designation,phone,profile_photo_url,is_active,created_at`,
+      [String(employee_id).trim(),String(full_name).trim(),email?String(email).trim():null,passwordHash,department||null,designation||null,phone||null,profile_photo_url||null]);
+    return res.status(201).json({ faculty:{...r.rows[0],name:r.rows[0].full_name} });
+  } catch(err) {
+    if(err.code==='23505') return res.status(409).json({error:'Employee ID or email is already in use'});
+    console.error('Faculty creation failed:',err.message);
+    return res.status(503).json({error:'Unable to create faculty'});
+  }
+});
+
 app.patch('/api/admin/faculty/:id', auth, requireRole('admin'), async (req, res) => {
   try {
     const { full_name, email, department, designation, phone, profile_photo_url } = req.body || {};

@@ -254,6 +254,30 @@ async function initDb() {
       }
     }
 
+    // Replace placeholder demo subjects with publicly verifiable KARE curriculum/LMS courses.
+    // Private authenticated SIS subject assignments are not publicly exposed, so those are not fabricated here.
+    await query('DELETE FROM subjects WHERE code LIKE \'DEMO-%\'');
+    const verifiedKareCourses = [
+      ['211MAT1301','Linear Algebra and Calculus','CSE','1','2021','Foundation/Common'],
+      ['211CHY1301','Chemistry','CSE','1','2021','Foundation/Common'],
+      ['211EEE1301','Basic Electrical and Electronics Engineering','CSE','1','2021','Foundation/Common'],
+      ['211MEC1201','Introduction to Engineering Visualization','CSE','1','2021','Foundation/Common'],
+      ['211PHY1301','Physics','CSE','1','2021','Foundation/Common'],
+      ['211ENG1301','English for Engineers','CSE','1','2021','Foundation/Common'],
+      ['211BIT1101','Biology for Engineers','CSE','1','2021','Foundation/Common'],
+      ['211CSE1401','Problem Solving using Computer Programming','CSE','1','2021','Foundation Core'],
+      ['211CSE1402','Python Programming','CSE','1','2021','Foundation Core'],
+      ['212INT3301','Data Communications and Computer Networks','IT','3','2021','Program Core'],
+      ['213INT3311','Mobile Networks','IT','4','2021','Program Elective'],
+      ['212MEC2318','Heat and Mass Transfer','MECH','3','2021','Program Core'],
+      ['212EEE2309','Power Electronics','EEE','2','2021','Program Core']
+    ];
+    for (const [code,name,department,semester,year,courseType] of verifiedKareCourses) {
+      await query(
+        "INSERT INTO subjects(code,name,department,semester,curriculum_year,course_type,source_url) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,department=EXCLUDED.department,semester=EXCLUDED.semester,curriculum_year=EXCLUDED.curriculum_year,course_type=EXCLUDED.course_type,source_url=EXCLUDED.source_url",
+        [code,name,department,semester,year,courseType,KARE_CSE_2021_SOURCE]
+      );
+    }
     // Make the development faculty account actually usable with the published CSE subject catalogue.
     // This is an assignment in our portal, not a claim that this demo faculty member is a real KARE faculty member.
     const faculty = await query("SELECT id FROM users WHERE role='faculty' AND email='faculty@kare.edu' LIMIT 1");

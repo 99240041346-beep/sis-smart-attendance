@@ -256,22 +256,67 @@ function StudentDashboard({ stats }) {
   );
 }
 
-function FacultyDashboard({ stats }) {
+function FacultyDashboard({ user, stats, onNavigate }) {
+  const firstName = (user.full_name || user.name || 'Faculty').split(' ')[0];
   return (
     <>
-      <div className="welcome-panel">
-        <div>
-          <p className="eyebrow">FACULTY INFORMATION SYSTEM</p>
-          <h2>Faculty Dashboard</h2>
-          <p>Manage classes, attendance sessions, student verification and your faculty profile.</p>
+      <div className="faculty-hero">
+        <div className="faculty-hero-main">
+          <div className="faculty-avatar-large">{(user.full_name || 'F').charAt(0).toUpperCase()}</div>
+          <div>
+            <p className="eyebrow">FACULTY INFORMATION SYSTEM</p>
+            <h2>Welcome, {firstName}</h2>
+            <p>{user.designation || 'Faculty'} • {user.department || 'Department not set'}</p>
+            <div className="faculty-meta">
+              <span><b>Employee ID</b>{user.employee_id || 'FAC001'}</span>
+              <span><b>Email</b>{user.email || 'faculty@kare.edu'}</span>
+            </div>
+          </div>
         </div>
-        <div className="dashboard-mark">FAC</div>
+        <div className="faculty-hero-actions">
+          <button className="sis-sign-in compact" onClick={() => onNavigate('Start Attendance')}>START ATTENDANCE</button>
+          <button className="secondary-btn" onClick={() => onNavigate('Profile')}>VIEW PROFILE</button>
+        </div>
       </div>
-      <div className="dashboard-grid">
-        <article className="info-card"><span>Attendance sessions</span><strong>{stats.sessions || 0}</strong><small>Created by you</small></article>
-        <article className="info-card"><span>Section control</span><strong>READY</strong><small>Faculty-controlled</small></article>
-        <article className="info-card"><span>Verification</span><strong>NEXT</strong><small>Face + GPS phase</small></article>
+
+      <div className="faculty-stat-grid">
+        <article className="faculty-stat-card"><span>Attendance Sessions</span><strong>{stats.sessions || 0}</strong><small>Sessions created by you</small></article>
+        <article className="faculty-stat-card"><span>Today's Classes</span><strong>0</strong><small>Timetable module next</small></article>
+        <article className="faculty-stat-card"><span>Students</span><strong>—</strong><small>Section roster next</small></article>
+        <article className="faculty-stat-card"><span>Account</span><strong>ACTIVE</strong><small>Faculty access enabled</small></article>
       </div>
+
+      <div className="faculty-dashboard-columns">
+        <section className="page-card faculty-panel">
+          <div className="panel-heading"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Faculty workspace</h3></div></div>
+          <div className="faculty-action-grid">
+            <button onClick={() => onNavigate('Start Attendance')}><span>01</span><b>Start Attendance</b><small>Create a controlled live QR session</small></button>
+            <button onClick={() => onNavigate('Live Attendance')}><span>02</span><b>Live Attendance</b><small>Monitor students marking attendance</small></button>
+            <button onClick={() => onNavigate('Students')}><span>03</span><b>Students</b><small>Manage section student verification</small></button>
+            <button onClick={() => onNavigate('Reports')}><span>04</span><b>Reports</b><small>Attendance and class reports</small></button>
+          </div>
+        </section>
+
+        <section className="page-card faculty-panel">
+          <div className="panel-heading"><div><p className="eyebrow">FACULTY PROFILE</p><h3>Account summary</h3></div><button className="text-action" onClick={() => onNavigate('Profile')}>Edit profile</button></div>
+          <div className="profile-summary-list">
+            <div><span>Name</span><b>{user.full_name || user.name || '—'}</b></div>
+            <div><span>Designation</span><b>{user.designation || 'Assistant Professor'}</b></div>
+            <div><span>Department</span><b>{user.department || '—'}</b></div>
+            <div><span>Phone</span><b>{user.phone || 'Not added'}</b></div>
+          </div>
+        </section>
+      </div>
+
+      <section className="page-card faculty-panel">
+        <div className="panel-heading"><div><p className="eyebrow">ATTENDANCE WORKFLOW</p><h3>Faculty-controlled verification</h3></div><span className="status-pill">PHASED BUILD</span></div>
+        <div className="workflow-steps">
+          <div className="workflow-step active"><span>1</span><b>Select subject & section</b><small>Faculty controls the class scope.</small></div>
+          <div className="workflow-step"><span>2</span><b>Generate live QR</b><small>Short-lived attendance token.</small></div>
+          <div className="workflow-step"><span>3</span><b>Verify student</b><small>QR → face/liveness → location.</small></div>
+          <div className="workflow-step"><span>4</span><b>Review attendance</b><small>Live records and reports.</small></div>
+        </div>
+      </section>
     </>
   );
 }
@@ -422,7 +467,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
     if (page === 'Dashboard') {
       if (user.role === 'student') return <StudentDashboard stats={stats} />;
-      if (user.role === 'faculty') return <FacultyDashboard stats={stats} />;
+      if (user.role === 'faculty') return <FacultyDashboard user={user} stats={stats} onNavigate={setPage} />;
       return <AdminDashboard stats={stats} />;
     }
     return (

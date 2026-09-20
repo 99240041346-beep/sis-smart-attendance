@@ -548,6 +548,81 @@ function StudentScanner() {
   );
 }
 
+
+function FacultyClassesPage() {
+  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  useEffect(()=>{api('/sis/faculty/classes').then(d=>setRows(d.classes||[])).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">FACULTY • ACADEMICS</p><h2>My Courses & Class Timetable</h2><p>Your assigned course offerings, sections and scheduled periods.</p></div></div>
+    {error&&<div className="login-error">{error}</div>}
+    {loading?<div className="workspace-loading">Loading class assignments...</div>:<div className="data-table-wrap"><table className="data-table"><thead><tr><th>Course</th><th>Section</th><th>Semester</th><th>Academic Year</th><th>Room</th><th>Schedule</th></tr></thead><tbody>
+      {rows.map(r=><tr key={r.id}><td><b>{r.code}</b><small>{r.name}</small></td><td>{r.section||'—'}</td><td>{r.semester||'—'}</td><td>{r.academic_year||'—'}</td><td>{r.room||'—'}</td><td>{r.day_of_week||'—'} {r.start_time||''}{r.end_time?'–'+r.end_time:''}</td></tr>)}
+      {!rows.length&&<tr><td colSpan="6" className="empty-table">No course offerings or timetable entries are assigned yet.</td></tr>}
+    </tbody></table></div>}
+  </section>;
+}
+
+function FacultyReportsPage() {
+  const [rows,setRows]=useState([]),[error,setError]=useState('');
+  useEffect(()=>{api('/sis/faculty/reports/attendance').then(d=>setRows(d.reports||[])).catch(e=>setError(e.message));},[]);
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">FACULTY • REPORTS</p><h2>Attendance Reports</h2><p>Session history and the number of attendance records marked in each class.</p></div></div>
+    {error&&<div className="login-error">{error}</div>}
+    <div className="report-summary"><div><span>Sessions</span><b>{rows.length}</b></div><div><span>Total Present Records</span><b>{rows.reduce((n,r)=>n+Number(r.present_count||0),0)}</b></div></div>
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Date / Time</th><th>Course</th><th>Section</th><th>Room</th><th>Present</th></tr></thead><tbody>
+      {rows.map(r=><tr key={r.session_id}><td>{r.started_at?new Date(r.started_at).toLocaleString('en-IN'):'—'}</td><td><b>{r.code}</b><small>{r.name}</small></td><td>{r.section||'—'}</td><td>{r.room||'—'}</td><td><span className="status-pill">{r.present_count}</span></td></tr>)}
+      {!rows.length&&<tr><td colSpan="5" className="empty-table">No attendance sessions have been recorded yet.</td></tr>}
+    </tbody></table></div>
+  </section>;
+}
+
+function FacultyLivePage({ stats }) {
+  const sessions=stats.openSessions||[];
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">FACULTY • LIVE ATTENDANCE</p><h2>Live Attendance</h2><p>Open attendance sessions currently controlled by this faculty account.</p></div><span className="status-pill">{sessions.length} OPEN</span></div>
+    <div className="live-session-grid">{sessions.map(s=><article className="live-session-card" key={s.id}><div className="live-dot">LIVE</div><h3>{s.subject_code||s.code||'Attendance Session'}</h3><p>Section <b>{s.section||'All'}</b></p><p>Room <b>{s.room||'—'}</b></p><p>Expires <b>{s.qr_expires_at?new Date(s.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></article>)}{!sessions.length&&<div className="empty-workspace"><b>No live sessions</b><span>Start Attendance to open a controlled QR session.</span></div>}</div>
+  </section>;
+}
+
+function AdminSubjectsPage() {
+  const empty={code:'',name:'',department:'',semester:''}; const [rows,setRows]=useState([]),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+  const load=()=>api('/subjects').then(d=>setRows(d.subjects||[])).catch(e=>setError(e.message));
+  useEffect(()=>{load();},[]);
+  async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{await api('/subjects',{method:'POST',body:JSON.stringify(form)});setForm(empty);setMessage('Subject created successfully.');load();}catch(e){setError(e.message)}finally{setBusy(false)}}
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMIC MASTER DATA</p><h2>Subjects</h2><p>Create and maintain the subject catalogue used by faculty attendance sessions.</p></div></div>
+    <form className="inline-create-form" onSubmit={save}><input placeholder="Code" value={form.code} onChange={e=>setForm({...form,code:e.target.value})} required/><input placeholder="Subject name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/><input placeholder="Department" value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/><input placeholder="Semester" value={form.semester} onChange={e=>setForm({...form,semester:e.target.value})}/><button className="sis-sign-in compact" disabled={busy}>{busy?'ADDING...':'ADD SUBJECT'}</button></form>
+    {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Semester</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.department||'—'}</td><td>{r.semester||'—'}</td></tr>)}{!rows.length&&<tr><td colSpan="4" className="empty-table">No subjects found.</td></tr>}</tbody></table></div>
+  </section>;
+}
+
+function AdminDepartmentsPage() {
+  const empty={code:'',name:''}; const [rows,setRows]=useState([]),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+  const load=()=>api('/sis/admin/departments').then(d=>setRows(d.departments||[])).catch(e=>setError(e.message));
+  useEffect(()=>{load();},[]);
+  async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{await api('/sis/admin/departments',{method:'POST',body:JSON.stringify(form)});setForm(empty);setMessage('Department created successfully.');load();}catch(e){setError(e.message)}finally{setBusy(false)}}
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">ADMIN • ORGANIZATION</p><h2>Departments</h2><p>Maintain department master data for the SIS.</p></div></div>
+    <form className="inline-create-form" onSubmit={save}><input placeholder="Department code" value={form.code} onChange={e=>setForm({...form,code:e.target.value})} required/><input placeholder="Department name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/><button className="sis-sign-in compact" disabled={busy}>{busy?'ADDING...':'ADD DEPARTMENT'}</button></form>
+    {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Department</th><th>HOD</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.hod_name||r.hod_id||'—'}</td></tr>)}{!rows.length&&<tr><td colSpan="3" className="empty-table">No departments found.</td></tr>}</tbody></table></div>
+  </section>;
+}
+
+function AdminAuditPage() {
+  const [rows,setRows]=useState([]),[error,setError]=useState('');
+  useEffect(()=>{api('/sis/admin/audit-logs').then(d=>setRows(d.logs||[])).catch(e=>setError(e.message));},[]);
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">ADMIN • SECURITY</p><h2>Audit Logs</h2><p>Recent security and administrative actions recorded by the system.</p></div></div>
+    {error&&<div className="login-error">{error}</div>}
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.created_at?new Date(r.created_at).toLocaleString('en-IN'):'—'}</td><td>{r.actor||'System'}</td><td><b>{r.action}</b></td><td>{r.entity_type||'—'}</td><td className="audit-json">{typeof r.metadata==='string'?r.metadata:JSON.stringify(r.metadata||{})}</td></tr>)}{!rows.length&&<tr><td colSpan="5" className="empty-table">No audit records found.</td></tr>}</tbody></table></div>
+  </section>;
+}
+
+function AdminReportPage() {
+  const [rows,setRows]=useState([]),[error,setError]=useState('');
+  useEffect(()=>{api('/sis/admin/audit-logs').then(d=>setRows(d.logs||[])).catch(e=>setError(e.message));},[]);
+  return <section className="page-card data-workspace"><div className="page-heading"><div><p className="eyebrow">ADMIN • REPORTING</p><h2>System Reports</h2><p>Administrative activity snapshot from the current audit stream.</p></div></div>
+    {error&&<div className="login-error">{error}</div>}<div className="report-summary"><div><span>Audit events loaded</span><b>{rows.length}</b></div><div><span>Latest event</span><b>{rows[0]?.created_at?new Date(rows[0].created_at).toLocaleDateString('en-IN'):'—'}</b></div></div>
+  </section>;
+}
+
+
 function Portal({ initialUser, onLogout }) {
   const [user, setUser] = useState(initialUser);
   const [page, setPage] = useState('Dashboard');
@@ -590,8 +665,15 @@ function Portal({ initialUser, onLogout }) {
     if (page === 'Profile') return <Profile user={user} onSaved={updated => setUser(updated)} />;
     if (user.role === 'student' && page !== 'Dashboard') return <StudentSisModule page={page} user={user} stats={stats} />;
     if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyManagement />;
+    if (user.role === 'admin' && page === 'Subjects') return <AdminSubjectsPage />;
+    if (user.role === 'admin' && page === 'Departments') return <AdminDepartmentsPage />;
+    if (user.role === 'admin' && page === 'Audit Logs') return <AdminAuditPage />;
+    if (user.role === 'admin' && page === 'Reports') return <AdminReportPage />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
+    if (user.role === 'faculty' && page === 'Live Attendance') return <FacultyLivePage stats={stats} />;
+    if (user.role === 'faculty' && (page === 'My Courses' || page === 'Class Timetable')) return <FacultyClassesPage />;
+    if (user.role === 'faculty' && page === 'Reports') return <FacultyReportsPage />;
     if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;
     if (page === 'Dashboard') {
       if (user.role === 'student') return <StudentDashboard user={user} stats={stats} />;

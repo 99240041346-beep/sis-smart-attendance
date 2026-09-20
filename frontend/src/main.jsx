@@ -715,14 +715,16 @@ function AdminSubjectsPage() {
   const load=()=>Promise.all([api('/subjects'),api('/sis/admin/departments')]).then(([s,d])=>{setRows(s.subjects||[]);setDepartments(d.departments||[])}).catch(e=>setError(e.message));
   useEffect(()=>{load();},[]);
   async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{await api('/subjects',{method:'POST',body:JSON.stringify(form)});setForm(empty);setMessage('Subject created successfully.');load();}catch(e){setError(e.message)}finally{setBusy(false)}}
+  const selectedSemester = filterSem || '';
   const filtered=rows.filter(r=>{
     const q=search.trim().toLowerCase();
     return (!q||[r.code,r.name,r.department,r.semester].some(v=>String(v||'').toLowerCase().includes(q))) &&
-      (!filterDept||r.department===filterDept) && (!filterSem||String(r.semester)===filterSem);
+      (!filterDept||r.department===filterDept) && (!selectedSemester||String(r.semester)===selectedSemester);
   });
+  const selectedDeptName = departments.find(d=>d.code===filterDept)?.name || 'All Departments';
   return <section className="page-card data-workspace">
-    <div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMIC MASTER DATA</p><h2>Subjects by Department & Semester</h2><p>Create the course catalogue used by student registration, faculty classes, timetable and attendance.</p></div></div>
-    <div className="master-data-banner"><strong>Semester structure</strong><span>Sem 1 → Sem 8</span><small>Admin can add programme-specific subjects; the database keeps department and semester with every subject.</small></div>
+    <div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMIC MASTER DATA</p><h2>Subjects by Department & Semester</h2><p>Select a department and semester to immediately display the subjects belonging to that semester.</p></div></div>
+    <div className="master-data-banner"><strong>Academic structure</strong><span>Department → Semester → Subjects</span><small>Subjects are stored with their department and semester, so changing the semester instantly changes the displayed subject list.</small></div>
     <form className="inline-create-form" onSubmit={save}>
       <input placeholder="Subject code" value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} required/>
       <input placeholder="Subject name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/>
@@ -731,8 +733,20 @@ function AdminSubjectsPage() {
       <button className="sis-sign-in compact" disabled={busy}>{busy?'ADDING...':'ADD SUBJECT'}</button>
     </form>
     {message&&<div className="save-success">✓ {message}</div>}{error&&<div className="login-error">{error}</div>}
-    <div className="student-list-toolbar"><div><b>{filtered.length}</b> subject records</div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search code, subject, department..."/><select value={filterDept} onChange={e=>setFilterDept(e.target.value)}><option value="">All departments</option>{departments.map(d=><option key={d.code} value={d.code}>{d.code}</option>)}</select><select value={filterSem} onChange={e=>setFilterSem(e.target.value)}><option value="">All semesters</option>{[1,2,3,4,5,6,7,8].map(n=><option key={n} value={n}>Sem {n}</option>)}</select></div>
-    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Subject</th><th>Department</th><th>Semester</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.department||'—'}</td><td><span className="status-pill">SEM {r.semester||'—'}</span></td></tr>)}{!filtered.length&&<tr><td colSpan="4" className="empty-table">No subjects match the selected department/semester.</td></tr>}</tbody></table></div>
+    <div className="student-list-toolbar">
+      <div><b>{filtered.length}</b> subjects {selectedSemester ? `in Semester ${selectedSemester}` : 'available'}</div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search subject code or name..."/>
+      <select value={filterDept} onChange={e=>{setFilterDept(e.target.value);setFilterSem('')}}><option value="">All departments</option>{departments.map(d=><option key={d.code} value={d.code}>{d.code}</option>)}</select>
+    </div>
+    <div className="semester-selector">
+      <div className="semester-selector-title"><span>SELECT SEMESTER</span><b>{selectedSemester ? `Semester ${selectedSemester}` : 'All Semesters'}</b></div>
+      <div className="semester-selector-grid">
+        <button type="button" className={!selectedSemester?'semester-choice active':''} onClick={()=>setFilterSem('')}>All</button>
+        {[1,2,3,4,5,6,7,8].map(n=><button type="button" key={n} className={String(n)===selectedSemester?'semester-choice active':'semester-choice'} onClick={()=>setFilterSem(String(n))}>Semester {n}</button>)}
+      </div>
+    </div>
+    <div className="selected-academic-context"><b>{selectedDeptName}</b><span>•</span><strong>{selectedSemester ? `Semester ${selectedSemester}` : 'All Semesters'}</strong><span>•</span><span>{filtered.length} subject(s)</span></div>
+    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Code</th><th>Subject</th><th>Department</th><th>Semester</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><b>{r.code}</b></td><td>{r.name}</td><td>{r.department||'—'}</td><td><span className="status-pill">SEM {r.semester||'—'}</span></td></tr>)}{!filtered.length&&<tr><td colSpan="4" className="empty-table">No subjects are configured for this department and semester yet.</td></tr>}</tbody></table></div>
   </section>;
 }
 

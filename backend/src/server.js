@@ -122,9 +122,12 @@ app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
       const faculty = Object.values(DEMO_USERS).filter(u => u.role === 'faculty').map(({ password, ...u }) => ({ ...u, name: u.full_name }));
       return res.json({ faculty });
     }
-    const r = await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url,is_active,created_at
-      FROM users WHERE role='faculty' AND is_active=true ORDER BY employee_id,full_name`);
-    return res.json({ faculty: r.rows.map(u => ({ ...u, name: u.full_name })) });
+    const r = await query(`SELECT u.id,u.employee_id,u.full_name,u.email,u.department,u.designation,u.phone,u.profile_photo_url,u.is_active,u.account_status,u.created_at,
+      fp.faculty_id_code,fp.school,fp.faculty_type,fp.employment_status,fp.gender,fp.date_of_birth,fp.nationality,fp.alternate_phone,fp.address,
+      fp.qualification,fp.specialization,fp.research_area,fp.joining_date,fp.relieving_date,fp.office_room,fp.experience_years,fp.photo_url,fp.extra_details
+      FROM users u LEFT JOIN faculty_profiles fp ON fp.faculty_id=u.id
+      WHERE u.role='faculty' AND u.is_active=true ORDER BY u.employee_id,u.full_name`);
+    return res.json({ faculty: r.rows.map(u => ({ ...u, name: u.full_name, profile_photo_url:u.profile_photo_url||u.photo_url })) });
   } catch (_err) { return res.status(503).json({ error: 'Faculty service unavailable' }); }
 });
 
@@ -169,36 +172,27 @@ app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
 
 app.patch('/api/admin/faculty/:id', auth, requireRole('admin'), async (req, res) => {
   try {
-    const { full_name, email, department, designation, phone, profile_photo_url } = req.body || {};
-    if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
-    if (String(profile_photo_url || '').length > 700000) return res.status(400).json({ error: 'Profile photo is too large' });
-
-    if (req.user.demo) {
-      const faculty = DEMO_USERS[req.params.id];
-      if (!faculty || faculty.role !== 'faculty') return res.status(404).json({ error: 'Faculty not found' });
-      Object.assign(faculty, {
-        full_name: String(full_name).trim(),
-        email: email || null,
-        department: department || null,
-        designation: designation || null,
-        phone: phone || null,
-        profile_photo_url: profile_photo_url || null
-      });
-      const { password: _password, ...safe } = faculty;
-      return res.json({ faculty: { ...safe, name: safe.full_name } });
+    const b=req.body||{};
+    if(!b.full_name||!String(b.full_name).trim())return res.status(400).json({error:'Full name is required'});
+    if(String(b.profile_photo_url||'').length>700000)return res.status(400).json({error:'Profile photo is too large'});
+    if(req.user.demo){
+      const faculty=DEMO_USERS[req.params.id];
+      if(!faculty||faculty.role!=='faculty')return res.status(404).json({error:'Faculty not found'});
+      Object.assign(faculty,{full_name:String(b.full_name).trim(),email:b.email||null,department:b.department||null,designation:b.designation||null,phone:b.phone||null,profile_photo_url:b.profile_photo_url||null});
+      faculty.faculty_profile={...(faculty.faculty_profile||{}),...b};
+      const {password:_password,...safe}=faculty; return res.json({faculty:{...safe,name:safe.full_name}});
     }
-
-    const r = await query(`UPDATE users
-      SET full_name=$1,email=$2,department=$3,designation=$4,phone=$5,profile_photo_url=$6,updated_at=NOW()
+    const r=await query(`UPDATE users SET full_name=$1,email=$2,department=$3,designation=$4,phone=$5,profile_photo_url=$6,updated_at=NOW()
       WHERE id=$7 AND role='faculty' AND is_active=true
-      RETURNING id,employee_id,full_name,email,role,department,designation,phone,profile_photo_url,is_active`,
-      [String(full_name).trim(), email || null, department || null, designation || null, phone || null, profile_photo_url || null, req.params.id]);
-    if (!r.rows[0]) return res.status(404).json({ error: 'Faculty not found' });
-    return res.json({ faculty: { ...r.rows[0], name: r.rows[0].full_name } });
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email is already in use' });
-    return res.status(503).json({ error: 'Unable to update faculty' });
-  }
+      RETURNING id,employee_id,full_name,email,role,department,designation,phone,profile_photo_url,is_active,account_status`,
+      [String(b.full_name).trim(),b.email||null,b.department||null,b.designation||null,b.phone||null,b.profile_photo_url||null,req.params.id]);
+    if(!r.rows[0])return res.status(404).json({error:'Faculty not found'});
+    await query(`INSERT INTO faculty_profiles(faculty_id,faculty_id_code,school,faculty_type,employment_status,gender,date_of_birth,nationality,alternate_phone,address,qualification,specialization,research_area,joining_date,relieving_date,office_room,experience_years,photo_url,extra_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ON CONFLICT(faculty_id) DO UPDATE SET faculty_id_code=EXCLUDED.faculty_id_code,school=EXCLUDED.school,faculty_type=EXCLUDED.faculty_type,employment_status=EXCLUDED.employment_status,gender=EXCLUDED.gender,date_of_birth=EXCLUDED.date_of_birth,nationality=EXCLUDED.nationality,alternate_phone=EXCLUDED.alternate_phone,address=EXCLUDED.address,qualification=EXCLUDED.qualification,specialization=EXCLUDED.specialization,research_area=EXCLUDED.research_area,joining_date=EXCLUDED.joining_date,relieving_date=EXCLUDED.relieving_date,office_room=EXCLUDED.office_room,experience_years=EXCLUDED.experience_years,photo_url=EXCLUDED.photo_url,extra_details=EXCLUDED.extra_details,updated_at=NOW()`,
+      [req.params.id,b.faculty_id_code||null,b.school||null,b.faculty_type||null,b.employment_status||'active',b.gender||null,b.date_of_birth||null,b.nationality||null,b.alternate_phone||null,b.address||null,b.qualification||null,b.specialization||null,b.research_area||null,b.joining_date||null,b.relieving_date||null,b.office_room||null,b.experience_years??null,b.profile_photo_url||null,b.extra_details||{}]);
+    return res.json({faculty:{...r.rows[0],name:r.rows[0].full_name}});
+  } catch(err){if(err.code==='23505')return res.status(409).json({error:'Email is already in use'});console.error(err);return res.status(503).json({error:'Unable to update faculty'});}
 });
 
 app.get('/api/dashboard', auth, async (req, res) => {
@@ -367,16 +361,21 @@ async function listRows(res, sql, params, key) {
 
 /* Complete SIS read APIs */
 app.get('/api/sis/student/overview', auth, requireRole('student'), async (req,res) => {
-  if (req.user.demo) return res.json({ student: { ...DEMO_USERS.student, password: undefined }, attendance:{total:0,present:0,percentage:0}, notifications:[], timetable:[], grades:[], fees:[], leaves:[] });
+  if (req.user.demo) {
+    const d=DEMO_USERS.student;
+    return res.json({student:{...d,password:undefined,student_profile:d.student_profile||{}},attendance:{total:0,present:0,percentage:0},notifications:[],timetable:[],grades:[],fees:[],leaves:[]});
+  }
   try {
     const [u,a,n,t,g,fees,l] = await Promise.all([
-      query(`SELECT u.id,u.register_no,u.full_name,u.email,u.department,u.semester,u.section,u.phone,sp.batch,sp.admission_year,sp.faculty_advisor_id
-        FROM users u LEFT JOIN student_profiles sp ON sp.student_id=u.id WHERE u.id=$1`,[req.user.sub]),
+      query(`SELECT u.id,u.register_no,u.full_name,u.email,u.department,u.semester,u.section,u.phone,u.profile_photo_url,u.account_status,
+        sp.*,fa.full_name AS faculty_advisor_name
+        FROM users u LEFT JOIN student_profiles sp ON sp.student_id=u.id
+        LEFT JOIN users fa ON fa.id=sp.faculty_advisor_id WHERE u.id=$1`,[req.user.sub]),
       query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE status='present')::int present FROM attendance_records WHERE student_id=$1`,[req.user.sub]),
       query(`SELECT n.id,n.title,n.message,n.created_at,n.expires_at,nr.read_at FROM notifications n LEFT JOIN notification_reads nr ON nr.notification_id=n.id AND nr.user_id=$1
         WHERE (n.audience_role IS NULL OR n.audience_role='student') AND (n.department IS NULL OR n.department=(SELECT department FROM users WHERE id=$1)) ORDER BY n.created_at DESC LIMIT 20`,[req.user.sub]),
       query(`SELECT t.id,t.day_of_week,t.start_time,t.end_time,t.room,s.code,s.name FROM timetables t JOIN course_offerings o ON o.id=t.offering_id JOIN subjects s ON s.id=o.subject_id
-        JOIN users f ON f.id=o.faculty_id WHERE o.section=(SELECT section FROM users WHERE id=$1) AND o.semester=(SELECT semester FROM users WHERE id=$1) AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub]),
+        WHERE o.section=(SELECT section FROM users WHERE id=$1) AND o.semester=(SELECT semester FROM users WHERE id=$1) AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub]),
       query(`SELECT g.id,g.semester,g.academic_year,g.grade,g.grade_point,g.credits,s.code,s.name FROM grades g JOIN subjects s ON s.id=g.subject_id WHERE g.student_id=$1 AND g.published=true ORDER BY g.academic_year DESC,g.semester,s.code`,[req.user.sub]),
       query(`SELECT id,academic_year,fee_type,amount,paid_amount,due_date,status FROM fee_accounts WHERE student_id=$1 ORDER BY due_date DESC NULLS LAST`,[req.user.sub]),
       query(`SELECT id,from_date,to_date,reason,status,reviewer_note,created_at FROM leave_requests WHERE student_id=$1 ORDER BY created_at DESC`,[req.user.sub])

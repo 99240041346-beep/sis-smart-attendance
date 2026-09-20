@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS attendance_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   faculty_id UUID NOT NULL REFERENCES users(id),
   subject_id UUID NOT NULL REFERENCES subjects(id),
+  offering_id UUID REFERENCES course_offerings(id) ON DELETE SET NULL,
+  semester VARCHAR(30),
+  academic_year VARCHAR(20),
   section VARCHAR(20),
   room VARCHAR(80),
   qr_token_hash TEXT NOT NULL,
@@ -287,6 +290,9 @@ CREATE TABLE IF NOT EXISTS attendance_security_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS offering_id UUID REFERENCES course_offerings(id) ON DELETE SET NULL;
+ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS semester VARCHAR(30);
+ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20);
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,7);
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,7);
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS allowed_radius_meters NUMERIC(10,2);
@@ -304,6 +310,8 @@ CREATE INDEX IF NOT EXISTS idx_student_profiles_application ON student_profiles(
 CREATE INDEX IF NOT EXISTS idx_student_profiles_advisor ON student_profiles(faculty_advisor_id);
 CREATE INDEX IF NOT EXISTS idx_faculty_profiles_school ON faculty_profiles(school);
 CREATE INDEX IF NOT EXISTS idx_course_offerings_faculty ON course_offerings(faculty_id);
+CREATE INDEX IF NOT EXISTS idx_course_offerings_faculty_semester ON course_offerings(faculty_id,semester,academic_year,section);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_offering ON attendance_sessions(offering_id);
 CREATE INDEX IF NOT EXISTS idx_course_registrations_student ON course_registrations(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_student ON grades(student_id);
 CREATE INDEX IF NOT EXISTS idx_grievances_student ON grievances(student_id);

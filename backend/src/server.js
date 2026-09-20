@@ -240,6 +240,152 @@ app.post('/api/attendance/scan', auth, requireRole('student'), async (req, res) 
 app.get('/api/attendance/sessions/:id/records', auth, requireRole('faculty','admin'), async (req, res) => { try { const r = await query(`SELECT a.id,a.marked_at,a.status,u.register_no,u.full_name FROM attendance_records a JOIN users u ON u.id=a.student_id WHERE a.session_id=$1 ORDER BY a.marked_at`, [req.params.id]); res.json({ records:r.rows }); } catch (_err) { res.status(503).json({ error:'Database unavailable' }); } });
 app.post('/api/attendance/sessions/:id/close', auth, requireRole('faculty'), async (req, res) => { try { const r = await query(`UPDATE attendance_sessions SET status='closed',closed_at=NOW() WHERE id=$1 AND faculty_id=$2 RETURNING id,status,closed_at`, [req.params.id,req.user.sub]); if (!r.rows[0]) return res.status(404).json({ error:'Session not found' }); res.json({ session:r.rows[0] }); } catch (_err) { res.status(503).json({ error:'Unable to close session' }); } });
 
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = v => Number(v) * Math.PI / 180;
+  const dLat = toRad(Number(lat2) - Number(lat1));
+  const dLon = toRad(Number(lon2) - Number(lon1));
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+async function listRows(res, sql, params, key) {
+  try { const r = await query(sql, params || []); return res.json({ [key]: r.rows }); }
+  catch (err) { console.error(err); return res.status(503).json({ error:'Database unavailable' }); }
+}
+
+/* Complete SIS read APIs */
+app.get('/api/sis/student/overview', auth, requireRole('student'), async (req,res) => {
+  if (req.user.demo) return res.json({ student: { ...DEMO_USERS.student, password: undefined }, attendance:{total:0,present:0,percentage:0}, notifications:[], timetable:[], grades:[], fees:[], leaves:[] });
+  try {
+    const [u,a,n,t,g,fees,l] = await Promise.all([
+      query(`SELECT u.id,u.register_no,u.full_name,u.email,u.department,u.semester,u.section,u.phone,sp.batch,sp.admission_year,sp.faculty_advisor_id
+        FROM users u LEFT JOIN student_profiles sp ON sp.student_id=u.id WHERE u.id=$1`,[req.user.sub]),
+      query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE status='present')::int present FROM attendance_records WHERE student_id=$1`,[req.user.sub]),
+      query(`SELECT n.id,n.title,n.message,n.created_at,n.expires_at,nr.read_at FROM notifications n LEFT JOIN notification_reads nr ON nr.notification_id=n.id AND nr.user_id=$1
+        WHERE (n.audience_role IS NULL OR n.audience_role='student') AND (n.department IS NULL OR n.department=(SELECT department FROM users WHERE id=$1)) ORDER BY n.created_at DESC LIMIT 20`,[req.user.sub]),
+      query(`SELECT t.id,t.day_of_week,t.start_time,t.end_time,t.room,s.code,s.name FROM timetables t JOIN course_offerings o ON o.id=t.offering_id JOIN subjects s ON s.id=o.subject_id
+        JOIN users f ON f.id=o.faculty_id WHERE o.section=(SELECT section FROM users WHERE id=$1) AND o.semester=(SELECT semester FROM users WHERE id=$1) AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub]),
+      query(`SELECT g.id,g.semester,g.academic_year,g.grade,g.grade_point,g.credits,s.code,s.name FROM grades g JOIN subjects s ON s.id=g.subject_id WHERE g.student_id=$1 AND g.published=true ORDER BY g.academic_year DESC,g.semester,s.code`,[req.user.sub]),
+      query(`SELECT id,academic_year,fee_type,amount,paid_amount,due_date,status FROM fee_accounts WHERE student_id=$1 ORDER BY due_date DESC NULLS LAST`,[req.user.sub]),
+      query(`SELECT id,from_date,to_date,reason,status,reviewer_note,created_at FROM leave_requests WHERE student_id=$1 ORDER BY created_at DESC`,[req.user.sub])
+    ]);
+    const total=a.rows[0]?.total||0, present=a.rows[0]?.present||0;
+    res.json({student:u.rows[0],attendance:{total,present,percentage:total?Math.round(present*10000/total)/100:0},notifications:n.rows,timetable:t.rows,grades:g.rows,fees:fees.rows,leaves:l.rows});
+  } catch(err){ console.error(err); res.status(503).json({error:'Student SIS unavailable'}); }
+});
+
+app.get('/api/sis/student/:resource', auth, requireRole('student'), async (req,res) => {
+  const allowed = {
+    notifications:[`SELECT n.*,nr.read_at FROM notifications n LEFT JOIN notification_reads nr ON nr.notification_id=n.id AND nr.user_id=$1 WHERE (n.audience_role IS NULL OR n.audience_role='student') ORDER BY n.created_at DESC`,'rows'],
+    grades:[`SELECT g.*,s.code,s.name FROM grades g JOIN subjects s ON s.id=g.subject_id WHERE g.student_id=$1 AND g.published=true ORDER BY g.academic_year DESC,g.semester`,'rows'],
+    timetable:[`SELECT t.*,s.code,s.name,o.section,o.semester FROM timetables t JOIN course_offerings o ON o.id=t.offering_id JOIN subjects s ON s.id=o.subject_id WHERE o.section=(SELECT section FROM users WHERE id=$1) ORDER BY t.day_of_week,t.start_time`,'rows'],
+    fees:[`SELECT * FROM fee_accounts WHERE student_id=$1 ORDER BY due_date DESC NULLS LAST`,'rows'],
+    leaves:[`SELECT * FROM leave_requests WHERE student_id=$1 ORDER BY created_at DESC`,'rows'],
+    grievances:[`SELECT * FROM grievances WHERE student_id=$1 ORDER BY created_at DESC`,'rows']
+  };
+  if (!allowed[req.params.resource]) return res.status(404).json({error:'Unknown SIS resource'});
+  if (req.user.demo) return res.json({[allowed[req.params.resource][1]]:[]});
+  return listRows(res,allowed[req.params.resource][0],[req.user.sub],allowed[req.params.resource][1]);
+});
+
+app.post('/api/sis/student/grievances', auth, requireRole('student'), async (req,res)=>{
+  try { const {category,subject,description}=req.body||{}; if(!category||!subject||!description)return res.status(400).json({error:'category, subject and description are required'});
+    const r=await query(`INSERT INTO grievances(student_id,category,subject,description) VALUES($1,$2,$3,$4) RETURNING *`,[req.user.sub,category,subject,description]);
+    res.status(201).json({grievance:r.rows[0]});
+  } catch(_e){res.status(503).json({error:'Unable to submit grievance'});}
+});
+
+app.post('/api/sis/student/leaves', auth, requireRole('student'), async (req,res)=>{
+  try { const {from_date,to_date,reason}=req.body||{}; if(!from_date||!to_date||!reason)return res.status(400).json({error:'from_date, to_date and reason are required'});
+    const r=await query(`INSERT INTO leave_requests(student_id,from_date,to_date,reason) VALUES($1,$2,$3,$4) RETURNING *`,[req.user.sub,from_date,to_date,reason]);
+    res.status(201).json({leave:r.rows[0]});
+  } catch(_e){res.status(503).json({error:'Unable to submit leave request'});}
+});
+
+/* Faculty SIS APIs */
+app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,res)=>{
+  if(req.user.demo)return res.json({faculty:DEMO_USERS.faculty,sessions:0,students:0,subjects:[],today:[],openSessions:[]});
+  try {
+    const [f,s,c,o]=await Promise.all([
+      query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1`,[req.user.sub]),
+      query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[(await query('SELECT department FROM users WHERE id=$1',[req.user.sub])).rows[0]?.department||null]),
+      query(`SELECT s.id,s.code,s.name,s.department,s.semester FROM faculty_subjects fs JOIN subjects s ON s.id=fs.subject_id WHERE fs.faculty_id=$1 ORDER BY s.code`,[req.user.sub]),
+      query(`SELECT id,subject_id,section,room,status,started_at,qr_expires_at FROM attendance_sessions WHERE faculty_id=$1 AND status='open' ORDER BY started_at DESC`,[req.user.sub])
+    ]);
+    res.json({faculty:f.rows[0],students:s.rows[0]?.count||0,subjects:c.rows,openSessions:o.rows});
+  } catch(_e){res.status(503).json({error:'Faculty SIS unavailable'});}
+});
+
+app.get('/api/sis/faculty/classes', auth, requireRole('faculty'), async (req,res)=>listRows(res,`SELECT o.id,o.section,o.semester,o.academic_year,o.room,s.id subject_id,s.code,s.name,t.day_of_week,t.start_time,t.end_time FROM course_offerings o JOIN subjects s ON s.id=o.subject_id LEFT JOIN timetables t ON t.offering_id=o.id WHERE o.faculty_id=$1 AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub],'classes'));
+
+app.get('/api/sis/faculty/reports/attendance', auth, requireRole('faculty','admin'), async (req,res)=>listRows(res,`SELECT s.id session_id,s.started_at,s.section,s.room,sub.code,sub.name,COUNT(a.id)::int present_count FROM attendance_sessions s JOIN subjects sub ON sub.id=s.subject_id LEFT JOIN attendance_records a ON a.session_id=s.id WHERE s.faculty_id=$1 GROUP BY s.id,sub.code,sub.name ORDER BY s.started_at DESC LIMIT 200`,[req.user.sub],'reports'));
+
+app.post('/api/sis/faculty/attendance/sessions', auth, requireRole('faculty'), async (req,res)=>{
+  try {
+    const {subjectId,section,room,durationSeconds=60,latitude,longitude,allowedRadiusMeters=100}=req.body||{};
+    if(!subjectId)return res.status(400).json({error:'subjectId is required'});
+    const token=crypto.randomBytes(32).toString('base64url');
+    const seconds=Math.max(15,Math.min(Number(durationSeconds)||60,300));
+    const exp=new Date(Date.now()+seconds*1000);
+    const r=await query(`INSERT INTO attendance_sessions(faculty_id,subject_id,section,room,qr_token_hash,qr_expires_at,latitude,longitude,allowed_radius_meters)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,subject_id,section,room,qr_expires_at,status,started_at,latitude,longitude,allowed_radius_meters`,
+      [req.user.sub,subjectId,section||null,room||null,hashToken(token),exp,latitude??null,longitude??null,allowedRadiusMeters??100]);
+    res.status(201).json({session:r.rows[0],qrToken:token});
+  } catch(err){console.error(err);res.status(503).json({error:'Unable to start secure attendance'});}
+});
+
+app.post('/api/sis/attendance/verify', auth, requireRole('student'), async (req,res)=>{
+  try {
+    const {qrToken,latitude,longitude,deviceFingerprint,faceMatchStatus='not_checked',livenessStatus='not_checked'}=req.body||{};
+    if(!qrToken)return res.status(400).json({error:'qrToken is required'});
+    const s=await query(`SELECT id,latitude,longitude,allowed_radius_meters FROM attendance_sessions WHERE qr_token_hash=$1 AND status='open' AND qr_expires_at>NOW() LIMIT 1`,[hashToken(qrToken)]);
+    if(!s.rows[0])return res.status(400).json({error:'QR expired, closed or invalid'});
+    const session=s.rows[0];
+    let distance=null;
+    if(session.latitude!=null&&session.longitude!=null&&latitude!=null&&longitude!=null) distance=haversineMeters(session.latitude,session.longitude,latitude,longitude);
+    if(distance!=null&&session.allowed_radius_meters!=null&&distance>Number(session.allowed_radius_meters)){
+      await query(`INSERT INTO attendance_security_events(session_id,student_id,event_type,device_fingerprint_hash,latitude,longitude,distance_meters,risk_score) VALUES($1,$2,'gps_outside_radius',$3,$4,$5,$6,90)`,[session.id,req.user.sub,deviceFingerprint?hashToken(deviceFingerprint):null,latitude,longitude,distance]);
+      return res.status(403).json({error:'You are outside the allowed attendance radius',distanceMeters:Math.round(distance)});
+    }
+    const deviceHash=deviceFingerprint?hashToken(deviceFingerprint):null;
+    if(deviceHash){
+      const conflict=await query(`SELECT student_id FROM attendance_records WHERE session_id=$1 AND device_fingerprint_hash=$2 AND student_id<>$3 LIMIT 1`,[session.id,deviceHash,req.user.sub]);
+      if(conflict.rows[0]){
+        await query(`INSERT INTO attendance_security_events(session_id,student_id,event_type,device_fingerprint_hash,risk_score,metadata) VALUES($1,$2,'device_multiple_students',$3,100,$4)`,[session.id,req.user.sub,deviceHash,JSON.stringify({otherStudent:conflict.rows[0].student_id})]);
+        return res.status(409).json({error:'This device has already been used for another student in this attendance session'});
+      }
+    }
+    if(faceMatchStatus==='failed'||livenessStatus==='failed') return res.status(403).json({error:'Identity/liveness verification failed'});
+    const risk=(faceMatchStatus==='matched'?0:20)+(livenessStatus==='live'?0:20);
+    const r=await query(`INSERT INTO attendance_records(session_id,student_id,method,latitude,longitude,distance_meters,device_fingerprint_hash,verification_method,liveness_status,face_match_status,risk_score)
+      VALUES($1,$2,'qr_secure',$3,$4,$5,$6,'qr+gps+identity',$7,$8,$9) ON CONFLICT(session_id,student_id) DO NOTHING RETURNING id,marked_at,status`,
+      [session.id,req.user.sub,latitude??null,longitude??null,distance,deviceHash,livenessStatus,faceMatchStatus,risk]);
+    if(!r.rows[0])return res.status(409).json({error:'Attendance already marked for this session'});
+    res.status(201).json({message:'Attendance verified and marked',attendance:r.rows[0],distanceMeters:distance==null?null:Math.round(distance),riskScore:risk});
+  } catch(err){console.error(err);res.status(503).json({error:'Secure attendance service unavailable'});}
+});
+
+/* Admin SIS APIs */
+app.get('/api/sis/admin/overview', auth, requireRole('admin'), async (req,res)=>{
+  if(req.user.demo)return res.json({counts:{students:1,faculty:1,admins:1,subjects:0,departments:0},recentAudit:[]});
+  try {
+    const r=await query(`SELECT role,COUNT(*)::int count FROM users WHERE is_active=true GROUP BY role`);
+    const subjects=await query('SELECT COUNT(*)::int count FROM subjects');
+    const departments=await query('SELECT COUNT(*)::int count FROM departments');
+    const audit=await query(`SELECT a.id,a.action,a.entity_type,a.created_at,u.full_name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 30`);
+    res.json({counts:{...Object.fromEntries(r.rows.map(x=>[x.role,x.count])),subjects:subjects.rows[0].count,departments:departments.rows[0].count},recentAudit:audit.rows});
+  }catch(_e){res.status(503).json({error:'Admin SIS unavailable'});}
+});
+
+app.get('/api/sis/admin/departments',auth,requireRole('admin'),async(req,res)=>listRows(res,'SELECT * FROM departments ORDER BY code',[],'departments'));
+app.post('/api/sis/admin/departments',auth,requireRole('admin'),async(req,res)=>{
+  try{const {code,name,hod_id}=req.body||{};if(!code||!name)return res.status(400).json({error:'code and name are required'});const r=await query('INSERT INTO departments(code,name,hod_id) VALUES($1,$2,$3) RETURNING *',[code,name,hod_id||null]);res.status(201).json({department:r.rows[0]});}catch(err){res.status(err.code==='23505'?409:503).json({error:err.code==='23505'?'Department code already exists':'Unable to create department'});}
+});
+app.get('/api/sis/admin/audit-logs',auth,requireRole('admin'),async(req,res)=>listRows(res,'SELECT a.*,u.full_name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 500',[],'logs'));
+
+
 app.use((_req,res) => res.status(404).json({ error:'Route not found' }));
 
 async function start() {

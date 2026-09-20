@@ -393,7 +393,9 @@ app.get('/api/sis/student/:resource', auth, requireRole('student'), async (req,r
     timetable:[`SELECT t.*,s.code,s.name,o.section,o.semester FROM timetables t JOIN course_offerings o ON o.id=t.offering_id JOIN subjects s ON s.id=o.subject_id WHERE o.section=(SELECT section FROM users WHERE id=$1) ORDER BY t.day_of_week,t.start_time`,'rows'],
     fees:[`SELECT * FROM fee_accounts WHERE student_id=$1 ORDER BY due_date DESC NULLS LAST`,'rows'],
     leaves:[`SELECT * FROM leave_requests WHERE student_id=$1 ORDER BY created_at DESC`,'rows'],
-    grievances:[`SELECT * FROM grievances WHERE student_id=$1 ORDER BY created_at DESC`,'rows']
+    grievances:[`SELECT * FROM grievances WHERE student_id=$1 ORDER BY created_at DESC`,'rows'],
+    registrations:[`SELECT cr.id,cr.status,cr.registered_at,cr.semester,cr.academic_year,s.code,s.name,s.credits FROM course_registrations cr JOIN subjects s ON s.id=cr.subject_id WHERE cr.student_id=$1 ORDER BY cr.academic_year DESC,cr.semester,s.code`,'rows'],
+    semester:[`SELECT register_no,full_name,department,semester,section,account_status FROM users WHERE id=$1 AND role='student'`,'rows']
   };
   if (!allowed[req.params.resource]) return res.status(404).json({error:'Unknown SIS resource'});
   if (req.user.demo) return res.json({[allowed[req.params.resource][1]]:[]});
@@ -533,6 +535,16 @@ app.get('/api/sis/admin/overview', auth, requireRole('admin'), async (req,res)=>
   }catch(_e){res.status(503).json({error:'Admin SIS unavailable'});}
 });
 
+app.get('/api/sis/admin/timetable',auth,requireRole('admin'),async(req,res)=>listRows(res,`
+  SELECT o.id,o.section,o.semester,o.academic_year,o.room,s.code,s.name,
+         u.full_name AS faculty_name,t.day_of_week,t.start_time,t.end_time
+  FROM course_offerings o
+  JOIN subjects s ON s.id=o.subject_id
+  LEFT JOIN users u ON u.id=o.faculty_id
+  LEFT JOIN timetables t ON t.offering_id=o.id
+  WHERE o.active=true
+  ORDER BY o.academic_year DESC,o.semester,o.section,t.day_of_week,t.start_time
+`,[],'timetable'));
 app.get('/api/sis/admin/departments',auth,requireRole('admin'),async(req,res)=>listRows(res,'SELECT * FROM departments ORDER BY code',[],'departments'));
 app.post('/api/sis/admin/departments',auth,requireRole('admin'),async(req,res)=>{
   try{const {code,name,hod_id}=req.body||{};if(!code||!name)return res.status(400).json({error:'code and name are required'});const r=await query('INSERT INTO departments(code,name,hod_id) VALUES($1,$2,$3) RETURNING *',[code,name,hod_id||null]);res.status(201).json({department:r.rows[0]});}catch(err){res.status(err.code==='23505'?409:503).json({error:err.code==='23505'?'Department code already exists':'Unable to create department'});}

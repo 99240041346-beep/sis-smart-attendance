@@ -322,7 +322,9 @@ function StudentSisModule({ page, user, stats }) {
     'Grade': 'grades',
     'Seating & Time Table': 'timetable',
     'Fees': 'fees',
-    'Notifications': 'notifications'
+    'Notifications': 'notifications',
+    'Course Registration': 'registrations',
+    'Semester': 'semester'
   };
   const [rows,setRows]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -718,6 +720,19 @@ function AdminSubjectsPage() {
   </section>;
 }
 
+function AdminTimetablePage() {
+  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  useEffect(()=>{api('/sis/admin/timetable').then(d=>setRows(d.timetable||[])).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
+  return <section className="page-card data-workspace">
+    <div className="page-heading"><div><p className="eyebrow">ADMIN • ACADEMICS</p><h2>Timetable</h2><p>Central timetable view across active course offerings, sections and faculty.</p></div></div>
+    {error&&<div className="login-error">{error}</div>}
+    {loading?<div className="workspace-loading">Loading timetable...</div>:<div className="data-table-wrap"><table className="data-table"><thead><tr><th>Course</th><th>Section</th><th>Semester</th><th>Faculty</th><th>Room</th><th>Schedule</th></tr></thead><tbody>
+      {rows.map((r,i)=><tr key={r.id+'-'+i}><td><b>{r.code}</b><small>{r.name}</small></td><td>{r.section||'—'}</td><td>{r.semester||'—'}</td><td>{r.faculty_name||'—'}</td><td>{r.room||'—'}</td><td>{r.day_of_week||'—'} {r.start_time||''}{r.end_time?'–'+r.end_time:''}</td></tr>)}
+      {!rows.length&&<tr><td colSpan="6" className="empty-table">No active timetable entries found.</td></tr>}
+    </tbody></table></div>}
+  </section>;
+}
+
 function AdminDepartmentsPage() {
   const empty={code:'',name:''}; const [rows,setRows]=useState([]),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const load=()=>api('/sis/admin/departments').then(d=>setRows(d.departments||[])).catch(e=>setError(e.message));
@@ -804,6 +819,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyFIS />;
     if (user.role === 'admin' && page === 'Subjects') return <AdminSubjectsPage />;
     if (user.role === 'admin' && page === 'Departments') return <AdminDepartmentsPage />;
+    if (user.role === 'admin' && page === 'Timetable') return <AdminTimetablePage />;
     if (user.role === 'admin' && page === 'Audit Logs') return <AdminAuditPage />;
     if (user.role === 'admin' && page === 'Reports') return <AdminReportPage />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;

@@ -20,11 +20,12 @@ const DEMO_USERS = {
 };
 
 function demoLogin(identifier, password, role) {
-  const user = DEMO_USERS[role];
-  if (!user || user.password !== password) return null;
-  const accepted = [user.register_no, user.employee_id, user.email, ...(user.login_aliases || [])].filter(Boolean).map(String).map(v => v.toLowerCase());
-  if (!accepted.includes(String(identifier).toLowerCase())) return null;
-  return user;
+  const user = Object.values(DEMO_USERS).find(candidate => {
+    if (candidate.role !== role || candidate.password !== password) return false;
+    const accepted = [candidate.register_no, candidate.employee_id, candidate.email, ...(candidate.login_aliases || [])].filter(Boolean).map(String).map(v => v.toLowerCase());
+    return accepted.includes(String(identifier).toLowerCase());
+  });
+  return user || null;
 }
 
 app.get('/api/health', async (_req, res) => {
@@ -71,7 +72,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/me', auth, async (req, res) => {
   try {
-    if (req.user.demo) { const demo = DEMO_USERS[req.user.role]; if (!demo) return res.status(404).json({ error: 'User not found' }); const { password: _password, ...safeUser } = demo; return res.json({ user: { ...safeUser, name: demo.full_name } }); }
+    if (req.user.demo) { const demo = DEMO_USERS[req.user.sub]; if (!demo) return res.status(404).json({ error: 'User not found' }); const { password: _password, ...safeUser } = demo; return res.json({ user: { ...safeUser, name: demo.full_name } }); }
     const r = await query(`SELECT id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation,profile_photo_url FROM users WHERE id=$1 AND is_active=true`, [req.user.sub]);
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });
@@ -84,7 +85,7 @@ app.patch('/api/profile', auth, async (req, res) => {
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
 
     if (req.user.demo) {
-      const demo = DEMO_USERS[req.user.role];
+      const demo = DEMO_USERS[req.user.sub];
       if (!demo) return res.status(404).json({ error: 'User not found' });
       const updated = {
         ...demo,
@@ -102,8 +103,8 @@ app.patch('/api/profile', auth, async (req, res) => {
 
     const r = await query(`UPDATE users
       SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,designation=$7,profile_photo_url=$8,updated_at=NOW()
-      WHERE id=$8 AND is_active=true
-      RETURNING id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation`,
+      WHERE id=$9 AND is_active=true
+      RETURNING id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation,profile_photo_url`,
       [String(full_name).trim(), email || null, department || null, semester || null, section || null, phone || null, designation || null, profile_photo_url || null, req.user.sub]);
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
     return res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });

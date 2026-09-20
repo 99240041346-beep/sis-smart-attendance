@@ -229,7 +229,7 @@ function AdminFacultyManagement() {
   </section>;
 }
 
-function StudentDashboard({ user, stats }) {
+function StudentDashboard({ user, stats, onNavigate }) {
   const attendance = stats.attendance || {};
   const attendancePct = attendance.total ? Math.round(((attendance.present || 0) / attendance.total) * 100) : 0;
   const today = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
@@ -306,7 +306,7 @@ function StudentDashboard({ user, stats }) {
           </section>
           <section className="sis-panel sis-quick-card">
             <div className="sis-panel-title"><h3>Quick Access</h3></div>
-            <p>Use the left navigation for Semester, Grade, Time Table, Fees, Course Registration, Attendance and other SIS services.</p>
+            <p>Use the left navigation for Semester, Grade, Time Table, Fees, Course Registration, Attendance and other SIS services.</p><button type="button" className="sis-quick-attendance" onClick={() => onNavigate('Attendance')}>MARK ATTENDANCE</button>
           </section>
         </aside>
       </div>
@@ -667,6 +667,7 @@ function Portal({ initialUser, onLogout }) {
 
   function renderPage() {
     if (page === 'Profile') return <Profile user={user} onSaved={updated => setUser(updated)} />;
+    if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'student' && page !== 'Dashboard') return <StudentSisModule page={page} user={user} stats={stats} />;
     if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyManagement />;
     if (user.role === 'admin' && page === 'Subjects') return <AdminSubjectsPage />;
@@ -680,7 +681,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'faculty' && page === 'Reports') return <FacultyReportsPage />;
     if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;
     if (page === 'Dashboard') {
-      if (user.role === 'student') return <StudentDashboard user={user} stats={stats} />;
+      if (user.role === 'student') return <StudentDashboard user={user} stats={stats} onNavigate={setPage} />;
       if (user.role === 'faculty') return <FacultyDashboard user={user} stats={stats} onNavigate={setPage} facultyStudents={facultyStudents} />;
       return <AdminDashboard stats={stats} />;
     }

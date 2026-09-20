@@ -78,6 +78,41 @@ app.get('/api/me', auth, async (req, res) => {
   } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); }
 });
 
+app.patch('/api/profile', auth, async (req, res) => {
+  try {
+    const { full_name, email, department, semester, section, phone, designation } = req.body || {};
+    if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'Full name is required' });
+
+    if (req.user.demo) {
+      const demo = DEMO_USERS[req.user.role];
+      if (!demo) return res.status(404).json({ error: 'User not found' });
+      const updated = {
+        ...demo,
+        full_name: String(full_name).trim(),
+        email: email ? String(email).trim() : demo.email,
+        department: department ?? demo.department,
+        semester: semester ?? demo.semester,
+        section: section ?? demo.section,
+        phone: phone ?? demo.phone ?? null,
+        designation: designation ?? demo.designation ?? null
+      };
+      return res.json({ user: { ...updated, password: undefined, name: updated.full_name } });
+    }
+
+    const r = await query(`UPDATE users
+      SET full_name=$1,email=$2,department=$3,semester=$4,section=$5,phone=$6,designation=$7,updated_at=NOW()
+      WHERE id=$8 AND is_active=true
+      RETURNING id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation`,
+      [String(full_name).trim(), email || null, department || null, semester || null, section || null, phone || null, designation || null, req.user.sub]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+    return res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });
+  } catch (err) {
+    console.error('Profile update failed:', err.message);
+    if (err.code === '23505') return res.status(409).json({ error: 'Email is already in use' });
+    return res.status(503).json({ error: 'Profile service unavailable' });
+  }
+});
+
 app.get('/api/dashboard', auth, async (req, res) => {
   try {
     if (req.user.demo) { if (req.user.role === 'student') return res.json({ role: 'student', attendance: { total: 0, present: 0 } }); if (req.user.role === 'faculty') return res.json({ role: 'faculty', sessions: 0 }); return res.json({ role: 'admin', users: 3 }); }

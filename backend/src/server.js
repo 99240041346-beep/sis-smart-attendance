@@ -156,16 +156,27 @@ app.post('/api/admin/teaching-assignments', auth, requireRole('admin'), async (r
     const {faculty_id,subject_id,semester,section,academic_year,room}=req.body||{};
     if(!faculty_id||!subject_id||!semester||!section||!academic_year) return res.status(400).json({error:'Faculty, subject, semester, section and academic year are required'});
     if(!/^[1-8]$/.test(String(semester))) return res.status(400).json({error:'Semester must be 1 to 8'});
-    const f=await query(`SELECT id,employee_id,full_name FROM users WHERE id=$1 AND role='faculty' AND is_active=true`,[faculty_id]);
-    if(!f.rows[0]) return res.status(404).json({error:'Faculty not found'});
+    // Admin demo accounts display stable demo IDs, but teaching assignments must
+    // reference the real PostgreSQL faculty UUID. Resolve demo faculty IDs by employee ID.
+    let facultyLookup = String(faculty_id);
+    const demoFaculty = Object.values(DEMO_USERS).find(u => u.role === 'faculty' && String(u.id) === facultyLookup);
+    if (demoFaculty?.employee_id) facultyLookup = demoFaculty.employee_id;
+    const f=await query(
+      facultyLookup === String(faculty_id) && /^[0-9a-fA-F-]{36}$/.test(facultyLookup)
+        ? `SELECT id,employee_id,full_name FROM users WHERE id=$1::uuid AND role='faculty' AND is_active=true`
+        : `SELECT id,employee_id,full_name FROM users WHERE employee_id=$1 AND role='faculty' AND is_active=true`,
+      [facultyLookup]
+    );
+    if(!f.rows[0]) return res.status(404).json({error:'Faculty account is not available in the database. Create the faculty account first.'});
     const sub=await query(`SELECT id,code,name,department FROM subjects WHERE id=$1`,[subject_id]);
     if(!sub.rows[0]) return res.status(404).json({error:'Subject not found'});
-    const existing=await query(`SELECT id FROM course_offerings WHERE subject_id=$1 AND faculty_id=$2 AND semester=$3 AND section=$4 AND academic_year=$5 LIMIT 1`,[subject_id,faculty_id,String(semester),String(section).trim(),String(academic_year).trim()]);
+    const resolvedFacultyId=f.rows[0].id;
+    const existing=await query(`SELECT id FROM course_offerings WHERE subject_id=$1 AND faculty_id=$2 AND semester=$3 AND section=$4 AND academic_year=$5 LIMIT 1`,[subject_id,resolvedFacultyId,String(semester),String(section).trim(),String(academic_year).trim()]);
     if(existing.rows[0]){
       const r=await query(`UPDATE course_offerings SET active=true,room=$1 WHERE id=$2 RETURNING id`,[room||null,existing.rows[0].id]);
       return res.json({assignment:{offering_id:r.rows[0].id,message:'Existing teaching assignment reactivated'}});
     }
-    const r=await query(`INSERT INTO course_offerings(subject_id,faculty_id,semester,section,academic_year,room,active) VALUES($1,$2,$3,$4,$5,$6,true) RETURNING id`,[subject_id,faculty_id,String(semester),String(section).trim(),String(academic_year).trim(),room||null]);
+    const r=await query(`INSERT INTO course_offerings(subject_id,faculty_id,semester,section,academic_year,room,active) VALUES($1,$2,$3,$4,$5,$6,true) RETURNING id`,[subject_id,resolvedFacultyId,String(semester),String(section).trim(),String(academic_year).trim(),room||null]);
     res.status(201).json({assignment:{offering_id:r.rows[0].id,message:'Teaching assignment created'}});
   } catch(err){ console.error('Teaching assignment create failed:',err.code||err.message); if(err.code==='23505') return res.status(409).json({error:'This faculty-subject-semester-section-year assignment already exists'}); res.status(503).json({error:'Unable to create teaching assignment'}); }
 });

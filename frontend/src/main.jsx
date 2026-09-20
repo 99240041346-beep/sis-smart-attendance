@@ -513,45 +513,81 @@ function QRGenerator({ subjects }) {
   );
 }
 
-function StudentScanner() {
-  const [scanner, setScanner] = useState(null);
-  const [result, setResult] = useState('');
-  const [error, setError] = useState('');
-
-  async function start() {
+function FacultyAttendancePage({ subjects=[] }) {
+  const [form,setForm]=useState({subject_id:'',section:'',room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
+  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  async function useLocation(){
     setError('');
-    setResult('');
-    try {
-      const instance = new Html5Qrcode('student-reader');
-      setScanner(instance);
-      await instance.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, async decoded => {
-        try {
-          const data = await api('/attendance/scan', { method: 'POST', body: JSON.stringify({ qrToken: decoded }) });
-          setResult(data.message);
-          await instance.stop();
-        } catch (e) { setError(e.message); }
-      });
-    } catch (e) { setError(e.message); }
+    if(!navigator.geolocation)return setError('Geolocation is not supported by this browser.');
+    navigator.geolocation.getCurrentPosition(p=>setForm(x=>({...x,latitude:p.coords.latitude.toFixed(7),longitude:p.coords.longitude.toFixed(7)})),e=>setError(e.message),{enableHighAccuracy:true,timeout:10000});
   }
-
-  async function stop() {
-    if (scanner) {
-      try { await scanner.stop(); } catch {}
-      setScanner(null);
-    }
+  async function start(){
+    setBusy(true);setError('');
+    try{
+      const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({...form,allowed_radius_meters:Number(form.allowed_radius_meters),qr_expires_minutes:Number(form.qr_expires_minutes)})});
+      setSession(d.session);setQr(d.session.qr_token||'');
+    }catch(e){setError(e.message)}finally{setBusy(false)}
   }
+  async function close(){
+    if(!session)return;
+    try{await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});setSession(null);setQr('');}catch(e){setError(e.message)}
+  }
+  return <section className="page-card data-workspace">
+    <div className="page-heading"><div><p className="eyebrow">FACULTY • ATTENDANCE</p><h2>Start Controlled Attendance</h2><p>Faculty opens a short-lived QR session for one subject and section.</p></div><span className="status-pill">{session?'LIVE':'READY'}</span></div>
+    {error&&<div className="login-error">{error}</div>}
+    {!session?<div className="attendance-start-grid">
+      <div className="field"><label>Subject</label><select value={form.subject_id} onChange={e=>setForm({...form,subject_id:e.target.value})}><option value="">Select subject</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}</select></div>
+      <div className="field"><label>Section</label><input value={form.section} onChange={e=>setForm({...form,section:e.target.value})} placeholder="S19"/></div>
+      <div className="field"><label>Room</label><input value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Block / Room"/></div>
+      <div className="field"><label>Allowed radius (meters)</label><input type="number" min="10" value={form.allowed_radius_meters} onChange={e=>setForm({...form,allowed_radius_meters:e.target.value})}/></div>
+      <div className="field"><label>QR validity (minutes)</label><input type="number" min="1" max="30" value={form.qr_expires_minutes} onChange={e=>setForm({...form,qr_expires_minutes:e.target.value})}/></div>
+      <div className="field"><label>Latitude</label><input value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})} placeholder="Faculty location"/></div>
+      <div className="field"><label>Longitude</label><input value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})} placeholder="Faculty location"/></div>
+      <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
+    </div>:<div className="attendance-live-panel">
+      <div><span className="live-dot">LIVE</span><h3>{session.subject_code||'Attendance Session'}</h3><p>Section <b>{session.section}</b> • Radius <b>{session.allowed_radius_meters} m</b> • Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></div>
+      <div className="attendance-qr">{qr?<QRCodeSVG value={qr} size={240}/>:<b>QR unavailable</b>}</div>
+      <p className="qr-token-note">Students must scan this QR from Student → Attendance. The server validates the session, expiry, section, location and security checks.</p>
+      <button className="secondary-btn" onClick={close}>CLOSE ATTENDANCE</button>
+    </div>}
+    {!session&&<div className="form-actions"><button className="sis-sign-in compact" disabled={busy} onClick={start}>{busy?'STARTING...':'START ATTENDANCE'}</button></div>}
+  </section>;
+}
 
-  useEffect(() => () => { if (scanner) scanner.stop().catch(() => {}); }, [scanner]);
-
-  return (
-    <section className="page-card">
-      <div className="page-heading"><div><p className="eyebrow">STUDENT • ATTENDANCE</p><h2>Scan Attendance QR</h2><p>This scanner will become the first step of the multi-factor attendance check.</p></div><span className="status-pill">QR</span></div>
-      <div id="student-reader" className="scanner-box" />
-      <div className="form-actions"><button className="sis-sign-in compact" onClick={start}>START CAMERA</button><button className="secondary-btn" onClick={stop}>STOP</button></div>
-      {result && <div className="save-success">✓ {result}</div>}
-      {error && <div className="login-error">{error}</div>}
-    </section>
-  );
+function StudentScanner() {
+  const [scanner,setScanner]=useState(null),[stage,setStage]=useState('ready'),[result,setResult]=useState(''),[error,setError]=useState('');
+  const [qrToken,setQrToken]=useState('');
+  const [coords,setCoords]=useState(null);
+  async function locate(){
+    if(!navigator.geolocation)return setError('This device does not support location.');
+    await new Promise(resolve=>navigator.geolocation.getCurrentPosition(p=>{setCoords({latitude:p.coords.latitude,longitude:p.coords.longitude});resolve()},e=>{setError('Location permission is required for attendance: '+e.message);resolve()},{enableHighAccuracy:true,timeout:10000}));
+  }
+  async function verify(decoded){
+    setQrToken(decoded);setStage('verifying');setError('');await locate();
+    try{
+      const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>resolve(p),e=>reject(e),{enableHighAccuracy:true,timeout:10000}));
+      const fingerprint=[navigator.userAgent,navigator.platform,screen.width,screen.height,navigator.language].join('|');
+      const data=await api('/sis/attendance/verify',{method:'POST',body:JSON.stringify({qr_token:decoded,latitude:pos.coords.latitude,longitude:pos.coords.longitude,device_fingerprint:fingerprint,face_match_status:'not_checked',liveness_status:'not_checked'})});
+      setResult(data.message||'Attendance marked successfully.');setStage('success');
+    }catch(e){setError(e.message);setStage('error')}
+  }
+  async function start(){
+    setError('');setResult('');setStage('scanning');
+    try{
+      const instance=new Html5Qrcode('student-reader');setScanner(instance);
+      await instance.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},async decoded=>{await instance.stop().catch(()=>{});setScanner(null);await verify(decoded)});
+    }catch(e){setError(e.message);setStage('error')}
+  }
+  async function stop(){if(scanner){await scanner.stop().catch(()=>{});setScanner(null)}setStage('ready')}
+  useEffect(()=>()=>{if(scanner)scanner.stop().catch(()=>{})},[scanner]);
+  return <section className="page-card data-workspace">
+    <div className="page-heading"><div><p className="eyebrow">STUDENT • ATTENDANCE</p><h2>Mark Attendance</h2><p>Scan the live faculty QR. Your location is checked against the faculty's allowed attendance radius.</p></div><span className="status-pill">{stage.toUpperCase()}</span></div>
+    <div className="attendance-steps"><span className={stage==='scanning'?'active':''}>1 SCAN QR</span><span>2 LOCATION</span><span>3 VERIFY</span><span>4 MARK</span></div>
+    {stage==='success'?<div className="save-success attendance-result">✓ {result}</div>:<><div id="student-reader" className="scanner-box"/><div className="form-actions"><button className="sis-sign-in compact" onClick={start} disabled={stage==='verifying'}>SCAN LIVE QR</button><button className="secondary-btn" onClick={stop}>STOP</button></div></>}
+    {error&&<div className="login-error">{error}</div>}
+    {stage==='verifying'&&<div className="workspace-loading">Checking QR session, expiry, location, device security and attendance eligibility…</div>}
+    {coords&&stage!=='success'&&<div className="security-note">Location captured for this attendance check.</div>}
+  </section>;
 }
 
 

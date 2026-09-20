@@ -312,8 +312,11 @@ async function initDb() {
       await query('INSERT INTO faculty_subjects(faculty_id,subject_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[f.rows[0].id,s.rows[0].id]);
       await query(
         `INSERT INTO course_offerings(subject_id,faculty_id,semester,section,academic_year,room,active)
-         VALUES($1,$2,$3,$4,$5,$6,true)
-         ON CONFLICT DO NOTHING`,
+         SELECT $1,$2,$3,$4,$5,$6,true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM course_offerings
+           WHERE subject_id=$1 AND faculty_id=$2 AND semester=$3 AND section=$4 AND academic_year=$5
+         )`,
         [s.rows[0].id,f.rows[0].id,semester,section,academicYear,'KARE BLOCK']
       );
     }

@@ -221,7 +221,7 @@ async function initDb() {
 
     // Make the development faculty account actually usable with the published CSE subject catalogue.
     // This is an assignment in our portal, not a claim that this demo faculty member is a real KARE faculty member.
-    const faculty = await query("SELECT id FROM users WHERE role='faculty' AND employee_id='faculty' LIMIT 1");
+    const faculty = await query("SELECT id FROM users WHERE role='faculty' AND email='faculty@kare.edu' LIMIT 1");
     const facultyId = faculty.rows[0]?.id;
     if (facultyId) {
       await query(

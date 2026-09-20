@@ -420,3 +420,5 @@ button, input, select { font: inherit; }
 .audit-json{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,monospace;font-size:9px!important;color:#758397!important}
 @media(max-width:900px){.live-session-grid{grid-template-columns:1fr 1fr}.inline-create-form{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.live-session-grid,.report-summary,.inline-create-form{grid-template-columns:1fr}}
+
+.sis-quick-attendance{margin-top:12px;border:1px solid #b9c9d9;background:#f4f8fb;color:#174f86;border-radius:4px;padding:9px 12px;font-size:10px;font-weight:800;letter-spacing:.04em;cursor:pointer}.sis-quick-attendance:hover{background:#e8f1f8}

@@ -303,3 +303,90 @@ button, input, select { font: inherit; }
   .student-list-toolbar input { width:100%; }
   .student-photo-editor { align-items:flex-start; flex-direction:column; }
 }
+
+
+/* KARE SIS STUDENT DASHBOARD */
+.sis-student-dashboard { color:#2f3f52; }
+.sis-student-header { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; margin-bottom:14px; }
+.sis-breadcrumb { color:#8a96a5; font-size:9px; font-weight:800; letter-spacing:.08em; margin-bottom:8px; }
+.sis-student-header h2 { margin:0; color:#26384e; font-size:22px; font-weight:600; }
+.sis-student-header p { margin:5px 0 0; color:#8290a0; font-size:11px; }
+.sis-student-date { color:#7b8999; font-size:10px; white-space:nowrap; }
+
+.sis-notice-strip { display:grid; grid-template-columns:145px 1fr 1fr; border:1px solid #d9e1e9; background:#fff; margin-bottom:14px; min-height:60px; }
+.sis-notice-title { display:flex; align-items:center; padding:13px 15px; background:#f3f6f9; color:#52657a; font-size:11px; font-weight:800; }
+.sis-notice-item { padding:11px 14px; border-left:1px solid #e1e7ed; }
+.sis-notice-item b,.sis-notice-item span { display:block; }
+.sis-notice-item b { color:#3a4d62; font-size:10px; margin-bottom:4px; }
+.sis-notice-item span { color:#7e8c9c; font-size:9px; line-height:1.45; }
+
+.sis-dashboard-layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(250px,.65fr); gap:14px; align-items:start; }
+.sis-dashboard-main,.sis-dashboard-side { min-width:0; }
+.sis-panel { background:#fff; border:1px solid #d9e1e9; border-radius:3px; padding:18px; margin-bottom:14px; }
+.sis-panel-title { display:flex; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid #e7ebef; padding-bottom:11px; margin-bottom:14px; }
+.sis-panel-title h3 { margin:0; color:#33465b; font-size:13px; font-weight:700; }
+.sis-panel-title span { color:#9aa5b1; font-size:9px; }
+
+.sis-person-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid #eef1f4; border-left:1px solid #eef1f4; }
+.sis-person-grid > div { min-height:57px; padding:10px 12px; border-right:1px solid #eef1f4; border-bottom:1px solid #eef1f4; }
+.sis-person-grid label,.sis-person-grid b { display:block; }
+.sis-person-grid label { color:#8a96a5; font-size:8px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px; }
+.sis-person-grid b { color:#44576c; font-size:10px; font-weight:600; line-height:1.35; }
+.sis-active-text { color:#2f7a4d !important; text-transform:uppercase; }
+
+.sis-stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.sis-stat-box { border:1px solid #e2e7ec; background:#fafbfc; padding:12px; }
+.sis-stat-box span,.sis-stat-box strong { display:block; }
+.sis-stat-box span { color:#8b97a5; font-size:9px; }
+.sis-stat-box strong { margin-top:7px; color:#315f89; font-size:19px; font-weight:700; }
+.sis-risk-text { color:#a05a45 !important; }
+
+.sis-session-list { border-top:1px solid #eef1f4; }
+.sis-session-row { display:grid; grid-template-columns:65px 1fr 55px; align-items:center; gap:12px; min-height:62px; border-bottom:1px solid #eef1f4; }
+.sis-session-row:last-child { border-bottom:0; }
+.sis-time-badge { display:inline-flex; align-items:center; justify-content:center; min-height:26px; padding:4px 6px; background:#eef3f7; color:#587087; font-size:8px; font-weight:800; }
+.sis-session-row b,.sis-session-row small { display:block; }
+.sis-session-row b { color:#405267; font-size:10px; }
+.sis-session-row small { margin-top:4px; color:#8a96a5; font-size:9px; line-height:1.45; }
+.sis-session-row > strong { color:#718196; text-align:right; font-size:8px; }
+
+.sis-status-card { padding-bottom:20px; }
+.sis-status-value { display:flex; align-items:center; gap:8px; color:#3d7251; font-size:15px; font-weight:800; }
+.sis-status-value span { width:8px; height:8px; border-radius:50%; background:#4e9868; }
+.sis-status-card p { margin:8px 0 0; color:#8491a0; font-size:9px; line-height:1.5; }
+.sis-side-list { display:grid; }
+.sis-side-list div { display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid #eef1f4; }
+.sis-side-list div:last-child { border-bottom:0; }
+.sis-side-list span { color:#8b97a5; font-size:9px; }
+.sis-side-list b { color:#4a5c70; text-align:right; font-size:9px; max-width:58%; }
+.sis-quick-card p { margin:0; color:#8290a0; font-size:9px; line-height:1.65; }
+
+.sis-module-page { min-height:430px; }
+.sis-module-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:15px; border-bottom:1px solid #e7ebef; padding-bottom:16px; margin-bottom:18px; }
+.sis-module-heading h2 { margin:0; color:#2e4156; font-size:20px; font-weight:600; }
+.sis-module-heading p { margin:6px 0 0; color:#8190a0; font-size:10px; }
+.sis-module-badge { padding:5px 8px; background:#eef3f7; color:#55718a; font-size:8px; font-weight:800; }
+.sis-module-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+.sis-detail-card { border:1px solid #e1e6eb; background:#fafbfc; padding:12px; min-height:62px; }
+.sis-detail-card span,.sis-detail-card b { display:block; }
+.sis-detail-card span { color:#8995a4; font-size:8px; text-transform:uppercase; margin-bottom:6px; }
+.sis-detail-card b { color:#45586d; font-size:10px; }
+.sis-empty-state { margin-top:18px; padding:28px; border:1px dashed #ccd6e0; background:#fbfcfd; text-align:center; }
+.sis-empty-state strong { color:#4b5e72; font-size:12px; }
+.sis-empty-state p { max-width:600px; margin:8px auto 0; color:#8995a4; font-size:10px; line-height:1.7; }
+
+@media (max-width: 950px) {
+  .sis-dashboard-layout { grid-template-columns:1fr; }
+  .sis-dashboard-side { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+  .sis-dashboard-side .sis-panel { margin-bottom:0; }
+  .sis-module-grid { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width: 720px) {
+  .sis-student-header { align-items:flex-start; flex-direction:column; }
+  .sis-notice-strip { grid-template-columns:1fr; }
+  .sis-notice-title { min-height:42px; }
+  .sis-notice-item { border-left:0; border-top:1px solid #e1e7ed; }
+  .sis-person-grid,.sis-stat-row,.sis-dashboard-side,.sis-module-grid { grid-template-columns:1fr; }
+  .sis-session-row { grid-template-columns:55px 1fr; }
+  .sis-session-row > strong { display:none; }
+}

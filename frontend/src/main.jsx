@@ -130,6 +130,7 @@ function Login({ onLogin }) {
 }
 
 function Profile({ user, onSaved }) {
+  const canEdit = user.role === 'admin';
   const [form, setForm] = useState({
     full_name: user.full_name || user.name || '',
     email: user.email || '',
@@ -144,98 +145,84 @@ function Profile({ user, onSaved }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const isStudent = user.role === 'student';
-  const isFaculty = user.role === 'faculty';
-
   async function save(e) {
     e.preventDefault();
-    setSaving(true);
-    setError('');
-    setMessage('');
+    if (!canEdit) return;
+    setSaving(true); setError(''); setMessage('');
     try {
       const data = await api('/profile', { method: 'PATCH', body: JSON.stringify({ ...form, profile_photo_url: photoPreview || null }) });
       const updated = data.user || { ...user, ...form, profile_photo_url: photoPreview || null, name: form.full_name };
       localStorage.setItem('kare_user', JSON.stringify(updated));
       onSaved(updated);
-      setMessage('Profile updated successfully.');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+      setMessage('Administrator profile updated successfully.');
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
   }
 
+  const title = user.role === 'student' ? 'Student Profile' : user.role === 'faculty' ? 'Faculty Profile' : 'Administrator Profile';
   return (
     <section className="page-card">
       <div className="page-heading">
         <div>
           <p className="eyebrow">ACCOUNT</p>
-          <h2>{isStudent ? 'Student Profile' : isFaculty ? 'Faculty Profile' : 'Administrator Profile'}</h2>
-          <p>Keep your SIS information accurate. Attendance security will use the verified profile in later phases.</p>
+          <h2>{title}</h2>
+          <p>{canEdit ? 'Administrator account settings.' : 'Your account details are managed by the administrator. Contact the appropriate portal administrator for changes.'}</p>
         </div>
         <div className="profile-avatar-wrap">{photoPreview ? <img className="profile-avatar-image" src={photoPreview} alt="" /> : <div className="profile-avatar">{(form.full_name || 'K').charAt(0).toUpperCase()}</div>}<span className="profile-status-dot" /></div>
       </div>
 
       <form className="profile-form" onSubmit={save}>
-        <div className="profile-overview full"><div><span>ROLE</span><b>{user.role.toUpperCase()}</b></div><div><span>STATUS</span><b className="profile-active">ACTIVE</b></div><div><span>EMPLOYEE ID</span><b>{user.employee_id || 'FAC001'}</b></div></div>
+        <div className="profile-overview full"><div><span>ROLE</span><b>{user.role.toUpperCase()}</b></div><div><span>STATUS</span><b className="profile-active">ACTIVE</b></div><div><span>ID</span><b>{user.register_no || user.employee_id || '—'}</b></div></div>
         <div className="section-label">Personal information</div>
-        <div className="field">
-          <label>Full Name</label>
-          <input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
-        </div>
-        <div className="field">
-          <label>Email</label>
-          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Phone</label>
-          <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Add phone number" />
-        </div>
+        <div className="field"><label>Full Name</label><input value={form.full_name} readOnly={!canEdit} onChange={e => setForm({ ...form, full_name: e.target.value })} required /></div>
+        <div className="field"><label>Email</label><input type="email" value={form.email} readOnly={!canEdit} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+        <div className="field"><label>Phone</label><input value={form.phone} readOnly={!canEdit} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
 
         <div className="section-label">Academic / employment information</div>
-        <div className="field">
-          <label>{isStudent ? 'Register Number' : 'Employee ID'}</label>
-          <input value={user.register_no || user.employee_id || ''} disabled />
-        </div>
-        <div className="field">
-          <label>Department</label>
-          <input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} />
-        </div>
-
-        {isStudent && <>
-          <div className="field">
-            <label>Semester</label>
-            <input value={form.semester} onChange={e => setForm({ ...form, semester: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Section</label>
-            <input value={form.section} onChange={e => setForm({ ...form, section: e.target.value })} placeholder="Example: S19" />
-          </div>
-        </>}
-
-        {isFaculty && <div className="field">
-          <label>Designation</label>
-          <input value={form.designation} onChange={e => setForm({ ...form, designation: e.target.value })} placeholder="Example: Assistant Professor" />
-        </div>}
-
-        {user.role === 'admin' && <div className="field">
-          <label>Access Level</label>
-          <input value="System Administrator" disabled />
-        </div>}
+        <div className="field"><label>{user.role === 'student' ? 'Register Number' : 'Employee ID'}</label><input value={user.register_no || user.employee_id || ''} disabled /></div>
+        <div className="field"><label>Department</label><input value={form.department} readOnly={!canEdit} onChange={e => setForm({ ...form, department: e.target.value })} /></div>
+        {user.role === 'student' && <><div className="field"><label>Semester</label><input value={form.semester} readOnly /></div><div className="field"><label>Section</label><input value={form.section} readOnly /></div></>}
+        {user.role === 'faculty' && <div className="field"><label>Designation</label><input value={form.designation} readOnly /></div>}
+        {user.role === 'admin' && <div className="field"><label>Access Level</label><input value="System Administrator" disabled /></div>}
 
         {error && <div className="login-error full">{error}</div>}
         {message && <div className="save-success full">✓ {message}</div>}
         <div className="field full profile-photo-field">
           <label>Profile photo</label>
-          <input type="url" value={photoPreview} onChange={e => setPhotoPreview(e.target.value)} placeholder="Optional image URL for the demo profile" />
-          <small>Photo upload storage will be connected in the faculty verification phase.</small>
+          <input type="url" value={photoPreview} readOnly={!canEdit} onChange={e => setPhotoPreview(e.target.value)} placeholder="Optional image URL" />
         </div>
-        <div className="full form-actions">
-          <button className="sis-sign-in compact" disabled={saving}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</button>
-        </div>
+        {canEdit && <div className="full form-actions"><button className="sis-sign-in compact" disabled={saving}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</button></div>}
+        {!canEdit && <div className="student-security-note full">🔒 This profile is read-only. Student and faculty details can only be changed by authorized staff.</div>}
       </form>
     </section>
   );
+}
+
+function AdminFacultyManagement() {
+  const empty = { full_name:'', email:'', department:'', designation:'', phone:'', profile_photo_url:'' };
+  const [faculty,setFaculty]=useState([]),[editing,setEditing]=useState(null),[form,setForm]=useState(empty),[showForm,setShowForm]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+  useEffect(()=>{api('/admin/faculty').then(d=>setFaculty(d.faculty||[])).catch(e=>setError(e.message));},[]);
+  const edit=f=>{setEditing(f.id);setForm({full_name:f.full_name||f.name||'',email:f.email||'',department:f.department||'',designation:f.designation||'',phone:f.phone||'',profile_photo_url:f.profile_photo_url||''});setShowForm(true);setMessage('');setError('');};
+  async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{const d=await api('/admin/faculty/'+editing,{method:'PATCH',body:JSON.stringify(form)});setFaculty(p=>p.map(x=>x.id===editing?d.faculty:x));setShowForm(false);setMessage('Faculty details updated successfully.');}catch(e){setError(e.message)}finally{setBusy(false)}}
+  return <section className="page-card student-management">
+    <div className="page-heading"><div><p className="eyebrow">ADMINISTRATION • FACULTY</p><h2>Faculty Details</h2><p>Faculty accounts and employment details are controlled by the administrator.</p></div></div>
+    {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
+    {showForm&&<form className="student-create-form" onSubmit={save}>
+      <div className="student-form-title"><div><p className="eyebrow">EDIT FACULTY</p><h3>Update faculty details</h3></div><button type="button" className="secondary-btn" onClick={()=>setShowForm(false)}>CANCEL</button></div>
+      <div className="student-form-grid">
+        <div className="field"><label>Full Name</label><input value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} required/></div>
+        <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
+        <div className="field"><label>Department</label><input value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></div>
+        <div className="field"><label>Designation</label><input value={form.designation} onChange={e=>setForm({...form,designation:e.target.value})}/></div>
+        <div className="field"><label>Phone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+        <div className="field"><label>Profile Photo URL</label><input type="url" value={form.profile_photo_url} onChange={e=>setForm({...form,profile_photo_url:e.target.value})}/></div>
+      </div>
+      <div className="form-actions"><button className="sis-sign-in compact" disabled={busy}>{busy?'SAVING...':'UPDATE FACULTY'}</button></div>
+    </form>}
+    <div className="student-table-wrap"><table className="student-table"><thead><tr><th>Faculty</th><th>Employee ID</th><th>Department</th><th>Designation</th><th>Contact</th><th>Action</th></tr></thead><tbody>
+      {faculty.map(f=><tr key={f.id}><td><div className="student-cell"><div className="student-mini-photo">{f.profile_photo_url?<img src={f.profile_photo_url} alt=""/>:(f.full_name||'F').charAt(0)}</div><div><b>{f.full_name||f.name}</b><small>{f.email||'No email'}</small></div></div></td><td><strong>{f.employee_id||'—'}</strong></td><td>{f.department||'—'}</td><td>{f.designation||'—'}</td><td>{f.phone||'—'}</td><td><button className="text-action" onClick={()=>edit(f)}>Edit</button></td></tr>)}
+      {!faculty.length&&<tr><td colSpan="6" className="empty-table">No faculty accounts found.</td></tr>}
+    </tbody></table></div>
+  </section>;
 }
 
 function StudentDashboard({ stats }) {
@@ -492,6 +479,7 @@ function Portal({ initialUser, onLogout }) {
 
   function renderPage() {
     if (page === 'Profile') return <Profile user={user} onSaved={updated => setUser(updated)} />;
+    if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyManagement />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
     if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;

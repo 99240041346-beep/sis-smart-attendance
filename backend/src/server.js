@@ -436,17 +436,51 @@ app.get('/api/sis/faculty/classes', auth, requireRole('faculty'), async (req,res
 
 app.get('/api/sis/faculty/reports/attendance', auth, requireRole('faculty','admin'), async (req,res)=>listRows(res,`SELECT s.id session_id,s.started_at,s.section,s.room,sub.code,sub.name,COUNT(a.id)::int present_count FROM attendance_sessions s JOIN subjects sub ON sub.id=s.subject_id LEFT JOIN attendance_records a ON a.session_id=s.id WHERE s.faculty_id=$1 GROUP BY s.id,sub.code,sub.name ORDER BY s.started_at DESC LIMIT 200`,[req.user.sub],'reports'));
 
+app.get('/api/sis/faculty/attendance/live', auth, requireRole('faculty'), async (req,res)=>{
+  try {
+    const sessions=await query(`SELECT s.id,s.subject_id,s.section,s.room,s.status,s.started_at,s.qr_expires_at,s.latitude,s.longitude,s.allowed_radius_meters,
+      sub.code AS subject_code,sub.name AS subject_name,
+      (SELECT COUNT(*)::int FROM attendance_records a WHERE a.session_id=s.id) AS present_count,
+      (SELECT COUNT(*)::int FROM attendance_security_events e WHERE e.session_id=s.id) AS security_event_count,
+      (SELECT COUNT(*)::int FROM users u WHERE u.role='student' AND u.is_active=true AND (s.section IS NULL OR lower(trim(u.section))=lower(trim(s.section)))) AS expected_count
+      FROM attendance_sessions s JOIN subjects sub ON sub.id=s.subject_id
+      WHERE s.faculty_id=$1 AND s.status='open' ORDER BY s.started_at DESC`,[req.user.sub]);
+    const ids=sessions.rows.map(x=>x.id);
+    let records=[],events=[];
+    if(ids.length){
+      records=(await query(`SELECT a.id,a.session_id,a.marked_at,a.status,a.distance_meters,a.verification_method,a.liveness_status,a.face_match_status,a.risk_score,u.register_no,u.full_name,u.section
+        FROM attendance_records a JOIN users u ON u.id=a.student_id WHERE a.session_id=ANY($1::uuid[]) ORDER BY a.marked_at DESC`,[ids])).rows;
+      events=(await query(`SELECT id,session_id,event_type,distance_meters,risk_score,metadata,created_at FROM attendance_security_events WHERE session_id=ANY($1::uuid[]) ORDER BY created_at DESC LIMIT 200`,[ids])).rows;
+    }
+    const bySession=Object.fromEntries(sessions.rows.map(s=>[s.id,{...s,records:[],security_events:[]} ]));
+    records.forEach(r=>bySession[r.session_id]?.records.push(r));
+    events.forEach(e=>bySession[e.session_id]?.security_events.push(e));
+    res.json({sessions:Object.values(bySession)});
+  } catch(err){console.error('Live attendance failed:',err.message);res.status(503).json({error:'Live attendance service unavailable'});}
+});
+
 app.post('/api/sis/faculty/attendance/sessions', auth, requireRole('faculty'), async (req,res)=>{
   try {
-    const {subjectId,section,room,durationSeconds=60,latitude,longitude,allowedRadiusMeters=100}=req.body||{};
+    const b=req.body||{};
+    const subjectId=b.subjectId||b.subject_id;
+    const section=String(b.section||'').trim()||null;
+    const room=String(b.room||'').trim()||null;
+    const latitude=b.latitude===''||b.latitude==null?null:Number(b.latitude);
+    const longitude=b.longitude===''||b.longitude==null?null:Number(b.longitude);
+    const allowedRadiusMeters=Math.max(10,Math.min(Number(b.allowedRadiusMeters??b.allowed_radius_meters)||100,5000));
+    const minutes=Math.max(1,Math.min(Number(b.qrExpiresMinutes??b.qr_expires_minutes)||5,30));
     if(!subjectId)return res.status(400).json({error:'subjectId is required'});
+    if((latitude===null)!==(longitude===null))return res.status(400).json({error:'Latitude and longitude must be provided together'});
+    if(latitude!==null&&(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180))return res.status(400).json({error:'Invalid faculty location'});
+    const subject=await query('SELECT id,code,name FROM subjects WHERE id=$1',[subjectId]);
+    if(!subject.rows[0])return res.status(404).json({error:'Subject not found'});
     const token=crypto.randomBytes(32).toString('base64url');
-    const seconds=Math.max(15,Math.min(Number(durationSeconds)||60,300));
-    const exp=new Date(Date.now()+seconds*1000);
+    const exp=new Date(Date.now()+minutes*60*1000);
     const r=await query(`INSERT INTO attendance_sessions(faculty_id,subject_id,section,room,qr_token_hash,qr_expires_at,latitude,longitude,allowed_radius_meters)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,subject_id,section,room,qr_expires_at,status,started_at,latitude,longitude,allowed_radius_meters`,
-      [req.user.sub,subjectId,section||null,room||null,hashToken(token),exp,latitude??null,longitude??null,allowedRadiusMeters??100]);
-    res.status(201).json({session:r.rows[0],qrToken:token});
+      [req.user.sub,subjectId,section,room,hashToken(token),exp,latitude,longitude,allowedRadiusMeters]);
+    const session={...r.rows[0],subject_code:subject.rows[0].code,subject_name:subject.rows[0].name,qr_token:token};
+    res.status(201).json({session,qrToken:token});
   } catch(err){console.error(err);res.status(503).json({error:'Unable to start secure attendance'});}
 });
 
@@ -457,6 +491,12 @@ app.post('/api/sis/attendance/verify', auth, requireRole('student'), async (req,
     const s=await query(`SELECT id,latitude,longitude,allowed_radius_meters FROM attendance_sessions WHERE qr_token_hash=$1 AND status='open' AND qr_expires_at>NOW() LIMIT 1`,[hashToken(qrToken)]);
     if(!s.rows[0])return res.status(400).json({error:'QR expired, closed or invalid'});
     const session=s.rows[0];
+    const student=await query("SELECT section FROM users WHERE id=$1 AND role='student' AND is_active=true",[req.user.sub]);
+    if(!student.rows[0])return res.status(404).json({error:'Student account not found'});
+    if(session.section && String(student.rows[0].section||'').trim().toLowerCase()!==String(session.section).trim().toLowerCase()){
+      await query(`INSERT INTO attendance_security_events(session_id,student_id,event_type,risk_score,metadata) VALUES($1,$2,'section_mismatch',85,$3)`,[session.id,req.user.sub,JSON.stringify({studentSection:student.rows[0].section||null,sessionSection:session.section})]);
+      return res.status(403).json({error:'This attendance session is restricted to section '+session.section});
+    }
     let distance=null;
     if(session.latitude!=null&&session.longitude!=null&&latitude!=null&&longitude!=null) distance=haversineMeters(session.latitude,session.longitude,latitude,longitude);
     if(distance!=null&&session.allowed_radius_meters!=null&&distance>Number(session.allowed_radius_meters)){

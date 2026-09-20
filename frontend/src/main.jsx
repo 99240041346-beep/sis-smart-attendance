@@ -225,28 +225,126 @@ function AdminFacultyManagement() {
   </section>;
 }
 
-function StudentDashboard({ stats }) {
+function StudentDashboard({ user, stats }) {
+  const attendance = stats.attendance || {};
+  const attendancePct = attendance.total ? Math.round(((attendance.present || 0) / attendance.total) * 100) : 0;
+  const today = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric' });
+
   return (
-    <>
-      <div className="welcome-panel">
+    <div className="sis-student-dashboard">
+      <div className="sis-student-header">
         <div>
-          <p className="eyebrow">STUDENT INFORMATION SYSTEM</p>
-          <h2>Student Dashboard</h2>
-          <p>Attendance, academics and your verified student profile will appear here.</p>
+          <div className="sis-breadcrumb">HOME / DASHBOARD</div>
+          <h2>Dashboard</h2>
+          <p>Welcome to Student Information System</p>
         </div>
-        <div className="dashboard-mark">SIS</div>
+        <div className="sis-student-date">{today}</div>
       </div>
-      <div className="dashboard-grid">
-        <article className="info-card"><span>Attendance</span><strong>{stats.attendance?.present || 0}</strong><small>Present records</small></article>
-        <article className="info-card"><span>Total classes</span><strong>{stats.attendance?.total || 0}</strong><small>Recorded sessions</small></article>
-        <article className="info-card"><span>Portal</span><strong>ACTIVE</strong><small>Student account</small></article>
+
+      <section className="sis-notice-strip">
+        <div className="sis-notice-title">Notifications</div>
+        <div className="sis-notice-item"><b>Student Portal</b><span>Your SIS account is active. Academic, attendance and profile information is shown below.</span></div>
+        <div className="sis-notice-item"><b>Attendance</b><span>Attendance marking will use the controlled KARE ONE verification workflow.</span></div>
+      </section>
+
+      <div className="sis-dashboard-layout">
+        <div className="sis-dashboard-main">
+          <section className="sis-panel">
+            <div className="sis-panel-title"><h3>Personal Details</h3><span>Student Information</span></div>
+            <div className="sis-person-grid">
+              <div><label>Register Number</label><b>{user.register_no || '—'}</b></div>
+              <div><label>Name of the Student</label><b>{user.full_name || user.name || '—'}</b></div>
+              <div><label>Degree / Programme</label><b>{user.department ? 'B.Tech / ' + user.department : '—'}</b></div>
+              <div><label>Batch</label><b>{user.batch || '—'}</b></div>
+              <div><label>Section</label><b>{user.section || '—'}</b></div>
+              <div><label>Semester</label><b>{user.semester || '—'}</b></div>
+              <div><label>Faculty Advisor</label><b>{user.faculty_advisor || '—'}</b></div>
+              <div><label>Email</label><b>{user.email || '—'}</b></div>
+              <div><label>Contact Number</label><b>{user.phone || '—'}</b></div>
+              <div><label>Account Status</label><b className="sis-active-text">Active</b></div>
+            </div>
+          </section>
+
+          <section className="sis-panel">
+            <div className="sis-panel-title"><h3>Attendance Summary</h3><span>Current records</span></div>
+            <div className="sis-stat-row">
+              <div className="sis-stat-box"><span>Present</span><strong>{attendance.present || 0}</strong></div>
+              <div className="sis-stat-box"><span>Total Sessions</span><strong>{attendance.total || 0}</strong></div>
+              <div className="sis-stat-box"><span>Attendance %</span><strong>{attendancePct}%</strong></div>
+              <div className="sis-stat-box"><span>Status</span><strong className={attendancePct < 75 && attendance.total ? 'sis-risk-text' : 'sis-active-text'}>{attendance.total ? (attendancePct < 75 ? 'LOW' : 'GOOD') : 'N/A'}</strong></div>
+            </div>
+          </section>
+
+          <section className="sis-panel">
+            <div className="sis-panel-title"><h3>Sessions & Circular / Notice</h3><span>Latest academic activity</span></div>
+            <div className="sis-session-list">
+              <div className="sis-session-row"><span className="sis-time-badge">TODAY</span><div><b>Academic Sessions</b><small>Your registered class sessions will appear here when timetable data is connected.</small></div><strong>—</strong></div>
+              <div className="sis-session-row"><span className="sis-time-badge">SIS</span><div><b>Course Registration</b><small>Course registration and semester modules are available from the navigation menu.</small></div><strong>OPEN</strong></div>
+              <div className="sis-session-row"><span className="sis-time-badge">INFO</span><div><b>University Circular / Notice</b><small>Official notices published for students will appear in this section.</small></div><strong>—</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <aside className="sis-dashboard-side">
+          <section className="sis-panel sis-status-card">
+            <div className="sis-panel-title"><h3>Current Status</h3></div>
+            <div className="sis-status-value"><span></span>ACTIVE</div>
+            <p>Your student account is active in KARE SIS.</p>
+          </section>
+          <section className="sis-panel">
+            <div className="sis-panel-title"><h3>Academic Snapshot</h3></div>
+            <div className="sis-side-list">
+              <div><span>Programme</span><b>{user.department || 'Not set'}</b></div>
+              <div><span>Semester</span><b>{user.semester || '—'}</b></div>
+              <div><span>Section</span><b>{user.section || '—'}</b></div>
+              <div><span>Register No</span><b>{user.register_no || '—'}</b></div>
+            </div>
+          </section>
+          <section className="sis-panel sis-quick-card">
+            <div className="sis-panel-title"><h3>Quick Access</h3></div>
+            <p>Use the left navigation for Semester, Grade, Time Table, Fees, Course Registration, Attendance and other SIS services.</p>
+          </section>
+        </aside>
       </div>
-      <div className="page-card compact-card">
-        <p className="eyebrow">NEXT ATTENDANCE LAYER</p>
-        <h3>QR + Face + Location Verification</h3>
-        <p>In the next phase, the student will scan the faculty's live QR and then pass the required face/liveness and location checks before attendance is accepted.</p>
+    </div>
+  );
+}
+
+function StudentSisModule({ page, user, stats }) {
+  const descriptions = {
+    'Grievances': ['Grievances', 'Submit and track student grievances.'],
+    'Semester': ['Semester', 'Semester information, registration and academic details.'],
+    'Arrear Registration': ['Arrear Registration', 'View and manage eligible arrear registration information.'],
+    'Course Registration': ['Course Registration', 'Registered courses and semester course registration.'],
+    'OE-HSS Registration': ['OE / HSS Registration', 'Open Elective and Humanities / Social Science course registration.'],
+    'Grade': ['Grade', 'Semester grades, SGPA, CGPA and course-wise results.'],
+    'Seating & Time Table': ['Seating & Time Table', 'Examination seating and class timetable information.'],
+    'Industrial Training TPO': ['Industrial Training TPO', 'Industrial training and placement-office related student information.'],
+    'Travel History': ['Travel History', 'Student travel and campus movement records when available.'],
+    'One Credit': ['One Credit', 'One-credit course registration and records.'],
+    'Online / InternIT Courses': ['Online / InternIT Courses', 'Online, internship and IT course records.'],
+    'NonCGPA': ['NonCGPA', 'Non-CGPA academic activities and records.'],
+    'Makeup': ['Makeup', 'Make-up examination and eligible course information.'],
+    'Fees': ['Fees', 'Tuition fee payment, fee due and payment history.'],
+    'Exam Papers': ['Exam Papers', 'Examination papers and related academic resources.'],
+    'Course Feedback': ['Course Feedback', 'Course-wise faculty feedback available to students.']
+  };
+  const item = descriptions[page] || [page, 'Student Information System module.'];
+  return (
+    <section className="sis-panel sis-module-page">
+      <div className="sis-breadcrumb">HOME / {item[0].toUpperCase()}</div>
+      <div className="sis-module-heading"><div><h2>{item[0]}</h2><p>{item[1]}</p></div><span className="sis-module-badge">SIS</span></div>
+      <div className="sis-module-grid">
+        <div className="sis-detail-card"><span>Student</span><b>{user.full_name || user.name || '—'}</b></div>
+        <div className="sis-detail-card"><span>Register Number</span><b>{user.register_no || '—'}</b></div>
+        <div className="sis-detail-card"><span>Programme</span><b>{user.department || '—'}</b></div>
+        <div className="sis-detail-card"><span>Semester / Section</span><b>{user.semester || '—'} / {user.section || '—'}</b></div>
       </div>
-    </>
+      <div className="sis-empty-state">
+        <strong>{item[0]} data</strong>
+        <p>This screen is now structured as an SIS module. Live records will be connected to the KARE ONE backend as each academic service is implemented.</p>
+      </div>
+    </section>
   );
 }
 
@@ -458,7 +556,7 @@ function Portal({ initialUser, onLogout }) {
   const [facultyStudents, setFacultyStudents] = useState([]);
   const [error, setError] = useState('');
 
-  const studentMenu = ['Dashboard', 'Profile', 'Attendance', 'Timetable', 'Subjects', 'Notifications', 'Leave Requests', 'History'];
+  const studentMenu = ['Dashboard', 'Grievances', 'Semester', 'Arrear Registration', 'Course Registration', 'OE-HSS Registration', 'Grade', 'Seating & Time Table', 'Industrial Training TPO', 'Travel History', 'One Credit', 'Online / InternIT Courses', 'NonCGPA', 'Makeup', 'Fees', 'Exam Papers', 'Course Feedback', 'Profile'];
   const facultyMenu = ['Dashboard', 'Profile', 'My Courses', 'Class Timetable', 'Start Attendance', 'Live Attendance', 'Students', 'Reports'];
   const adminMenu = ['Dashboard', 'Profile', 'Students', 'Faculty', 'Departments', 'Subjects', 'Timetable', 'Reports', 'Audit Logs'];
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;
@@ -479,12 +577,13 @@ function Portal({ initialUser, onLogout }) {
 
   function renderPage() {
     if (page === 'Profile') return <Profile user={user} onSaved={updated => setUser(updated)} />;
+    if (user.role === 'student' && page !== 'Dashboard') return <StudentSisModule page={page} user={user} stats={stats} />;
     if (user.role === 'admin' && page === 'Faculty') return <AdminFacultyManagement />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
     if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
     if (user.role === 'faculty' && page === 'Students') return <StudentManagement />;
     if (page === 'Dashboard') {
-      if (user.role === 'student') return <StudentDashboard stats={stats} />;
+      if (user.role === 'student') return <StudentDashboard user={user} stats={stats} />;
       if (user.role === 'faculty') return <FacultyDashboard user={user} stats={stats} onNavigate={setPage} facultyStudents={facultyStudents} />;
       return <AdminDashboard stats={stats} />;
     }

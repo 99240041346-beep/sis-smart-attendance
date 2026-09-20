@@ -52,7 +52,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { identifier, password, role } = req.body || {};
     if (!identifier || !password || !role) return res.status(400).json({ error: 'identifier, password and role are required' });
     try {
-      const result = await query(`SELECT id, register_no, employee_id, full_name, email, password_hash, role, department, semester, section FROM users WHERE is_active=true AND role=$1 AND (register_no=$2 OR employee_id=$2 OR lower(email)=lower($2)) LIMIT 1`, [role, identifier]);
+      const result = await query(`SELECT id, register_no, employee_id, full_name, email, password_hash, role, department, semester, section, phone, designation, profile_photo_url FROM users WHERE is_active=true AND role=$1 AND (register_no=$2 OR employee_id=$2 OR lower(email)=lower($2)) LIMIT 1`, [role, identifier]);
       const user = result.rows[0];
       if (user && await bcrypt.compare(password, user.password_hash)) {
         const token = jwt.sign({ sub: user.id, role: user.role, name: user.full_name }, JWT_SECRET, { expiresIn: '8h' });
@@ -72,7 +72,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/me', auth, async (req, res) => {
   try {
     if (req.user.demo) { const demo = DEMO_USERS[req.user.role]; if (!demo) return res.status(404).json({ error: 'User not found' }); const { password: _password, ...safeUser } = demo; return res.json({ user: { ...safeUser, name: demo.full_name } }); }
-    const r = await query(`SELECT id,register_no,employee_id,full_name,email,role,department,semester,section FROM users WHERE id=$1 AND is_active=true`, [req.user.sub]);
+    const r = await query(`SELECT id,register_no,employee_id,full_name,email,role,department,semester,section,phone,designation,profile_photo_url FROM users WHERE id=$1 AND is_active=true`, [req.user.sub]);
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: { ...r.rows[0], name: r.rows[0].full_name } });
   } catch (_err) { res.status(503).json({ error: 'Database unavailable' }); }

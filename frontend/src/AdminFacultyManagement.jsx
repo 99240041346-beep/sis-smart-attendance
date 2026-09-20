@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import TeachingAssignments from './TeachingAssignments';
 
 const API=(import.meta.env.VITE_API_URL||'https://kare-one-api.onrender.com/api').replace(/\/$/,'');
 async function api(path,options={}){
@@ -78,5 +79,6 @@ export default function AdminFacultyManagement(){
       {filtered.map(f=><tr key={f.id}><td><div className="student-cell"><div className="student-mini-photo">{f.profile_photo_url?<img src={f.profile_photo_url} alt=""/>:(f.full_name||'F').charAt(0)}</div><div><b>{f.full_name}</b><small>{f.email||'No email'}</small></div></div></td><td><strong>{f.employee_id}</strong></td><td>{f.department||'—'}<small>{f.school||''}</small></td><td>{f.designation||'—'}</td><td>{f.qualification||'—'}</td><td><button className="text-action" onClick={()=>edit(f)}>Edit</button></td></tr>)}
       {!filtered.length&&<tr><td colSpan="6" className="empty-table">No faculty accounts found.</td></tr>}
     </tbody></table></div>
+    <TeachingAssignments />
   </section>;
 }

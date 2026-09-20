@@ -20,7 +20,9 @@ const DEMO_USERS = {
   faculty3: { id: 'demo-faculty-3', register_no: null, employee_id: 'FAC003', full_name: 'Prof. Rahul Varma', email: 'faculty3@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00003', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty3'] },
   faculty4: { id: 'demo-faculty-4', register_no: null, employee_id: 'FAC004', full_name: 'Dr. Meena Krishnan', email: 'faculty4@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00004', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty4'] },
   faculty5: { id: 'demo-faculty-5', register_no: null, employee_id: 'FAC005', full_name: 'Prof. Suresh Babu', email: 'faculty5@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00005', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty5'] },
-  admin: { id: 'demo-admin', register_no: null, employee_id: 'admin', full_name: 'Demo Administrator', email: 'admin@kare.edu', role: 'admin', department: null, semester: null, section: null, password: 'admin' }
+  admin: { id: 'demo-admin', register_no: null, employee_id: 'admin', full_name: 'Demo Administrator', email: 'admin@kare.edu', role: 'admin', department: null, semester: null, section: null, password: 'admin' },
+  // Backward compatibility for faculty JWTs issued before the five-account migration.
+  'demo-faculty': { id: 'demo-faculty', register_no: null, employee_id: 'FAC001', full_name: 'Dr. Arjun Kumar', email: 'faculty1@kare.edu', role: 'faculty', department: 'Computer Science and Engineering', semester: null, section: null, phone: '+91 90000 00001', designation: 'Assistant Professor', password: 'faculty123', login_aliases: ['faculty','faculty1'] }
 };
 
 function demoLogin(identifier, password, role) {
@@ -428,17 +430,22 @@ app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,re
     return res.json({faculty:{...d,password:undefined,faculty_profile:d.faculty_profile||{}},sessions:0,students:Object.values(DEMO_USERS).filter(x=>x.role==='student').length,subjects:[],today:[],openSessions:[]});
   }
   try {
-    const [f,s,c,o]=await Promise.all([
-      query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1`,[req.user.sub]),
-      query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[(await query('SELECT department FROM users WHERE id=$1',[req.user.sub])).rows[0]?.department||null]),
+    const userResult=await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1 AND role='faculty' AND is_active=true`,[req.user.sub]);
+    if(!userResult.rows[0]) return res.status(404).json({error:'Faculty not found'});
+    const faculty=userResult.rows[0];
+    const [studentResult, offeringResult, sessionResult]=await Promise.all([
+      query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[faculty.department||null]),
       query(`SELECT DISTINCT o.id AS offering_id,s.id,s.code,s.name,s.department,o.semester,o.section,o.academic_year,o.room
         FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
         WHERE o.faculty_id=$1 AND o.active=true
         ORDER BY o.semester::int,s.code,o.section`,[req.user.sub]),
       query(`SELECT id,subject_id,section,room,status,started_at,qr_expires_at FROM attendance_sessions WHERE faculty_id=$1 AND status='open' ORDER BY started_at DESC`,[req.user.sub])
     ]);
-    res.json({faculty:f.rows[0],students:s.rows[0]?.count||0,subjects:c.rows,openSessions:o.rows});
-  } catch(_e){res.status(503).json({error:'Faculty SIS unavailable'});}
+    return res.json({faculty,students:studentResult.rows[0]?.count||0,subjects:offeringResult.rows,openSessions:sessionResult.rows});
+  } catch(err) {
+    console.error('Faculty SIS overview failed:',err.code||err.message);
+    return res.status(503).json({error:'Faculty SIS unavailable',detail:process.env.NODE_ENV==='development'?(err.code||err.message):undefined});
+  }
 });
 
 app.get('/api/sis/faculty/classes', auth, requireRole('faculty'), async (req,res)=>listRows(res,`SELECT o.id,o.section,o.semester,o.academic_year,o.room,s.id subject_id,s.code,s.name,t.day_of_week,t.start_time,t.end_time FROM course_offerings o JOIN subjects s ON s.id=o.subject_id LEFT JOIN timetables t ON t.offering_id=o.id WHERE o.faculty_id=$1 AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub],'classes'));

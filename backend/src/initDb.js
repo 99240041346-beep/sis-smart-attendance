@@ -219,6 +219,41 @@ async function initDb() {
       );
     }
 
+    // Demo semester catalogue: every department has six subjects in each semester (1-8)
+    // so Admin can browse Department -> Semester -> Subjects immediately in the portal.
+    const demoSemesterSubjects = {
+      CSE: ['Programming Fundamentals','Data Structures','Database Systems','Computer Networks','Operating Systems','Software Engineering'],
+      IT: ['Programming Fundamentals','Web Technology','Data Structures','Database Systems','Cloud Computing','Cyber Security'],
+      CIT: ['Computing Fundamentals','Programming','Data Structures','Database Systems','Networks','Information Security'],
+      ECE: ['Circuit Theory','Electronic Devices','Digital Logic','Signals and Systems','Communication Systems','Embedded Systems'],
+      EEE: ['Electrical Circuits','Electrical Machines','Digital Electronics','Power Systems','Control Systems','Power Electronics'],
+      MECH: ['Engineering Graphics','Engineering Mechanics','Thermodynamics','Fluid Mechanics','Manufacturing Technology','Machine Design'],
+      CIVIL: ['Engineering Mechanics','Building Materials','Surveying','Strength of Materials','Fluid Mechanics','Structural Analysis'],
+      AERO: ['Engineering Mechanics','Aerodynamics','Aircraft Materials','Aircraft Structures','Propulsion','Flight Dynamics'],
+      AUTO: ['Engineering Mechanics','Automotive Materials','Thermodynamics','Automotive Engines','Vehicle Dynamics','Automotive Design'],
+      AGRI: ['Agricultural Fundamentals','Soil Science','Crop Science','Farm Machinery','Irrigation Engineering','Agricultural Processing'],
+      FT: ['Food Science','Food Chemistry','Food Microbiology','Food Processing','Food Packaging','Food Quality Control'],
+      MATH: ['Calculus','Linear Algebra','Differential Equations','Probability and Statistics','Numerical Methods','Applied Mathematics'],
+      PHYS: ['Engineering Physics','Mechanics','Electromagnetism','Optics','Quantum Physics','Applied Physics'],
+      CHEM: ['Engineering Chemistry','Organic Chemistry','Inorganic Chemistry','Physical Chemistry','Analytical Chemistry','Industrial Chemistry'],
+      FORENSIC: ['Forensic Fundamentals','Crime Scene Science','Forensic Chemistry','Forensic Biology','Digital Forensics','Forensic Investigation'],
+      BIOMED: ['Biomedical Fundamentals','Human Anatomy','Biomaterials','Biomedical Instrumentation','Medical Imaging','Biomechanics']
+    };
+    for (const [department, names] of Object.entries(demoSemesterSubjects)) {
+      for (let semester = 1; semester <= 8; semester += 1) {
+        for (let n = 0; n < names.length; n += 1) {
+          const code = 'DEMO-' + department + '-S' + semester + '-' + String(n + 1).padStart(2, '0');
+          const name = names[n] + ' ' + semester;
+          await query(
+            `INSERT INTO subjects(code,name,department,semester,curriculum_year,course_type,stream)
+             VALUES($1,$2,$3,$4,'DEMO','Demo Semester','Core')
+             ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,department=EXCLUDED.department,semester=EXCLUDED.semester`,
+            [code,name,department,String(semester)]
+          );
+        }
+      }
+    }
+
     // Make the development faculty account actually usable with the published CSE subject catalogue.
     // This is an assignment in our portal, not a claim that this demo faculty member is a real KARE faculty member.
     const faculty = await query("SELECT id FROM users WHERE role='faculty' AND email='faculty@kare.edu' LIMIT 1");

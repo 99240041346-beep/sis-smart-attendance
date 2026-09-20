@@ -362,7 +362,8 @@ async function listRows(res, sql, params, key) {
 /* Complete SIS read APIs */
 app.get('/api/sis/student/overview', auth, requireRole('student'), async (req,res) => {
   if (req.user.demo) {
-    const d=DEMO_USERS.student;
+    const d=DEMO_USERS[req.user.sub];
+    if(!d || d.role!=='student') return res.status(404).json({error:'Student not found'});
     return res.json({student:{...d,password:undefined,student_profile:d.student_profile||{}},attendance:{total:0,present:0,percentage:0},notifications:[],timetable:[],grades:[],fees:[],leaves:[]});
   }
   try {
@@ -415,7 +416,11 @@ app.post('/api/sis/student/leaves', auth, requireRole('student'), async (req,res
 
 /* Faculty SIS APIs */
 app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,res)=>{
-  if(req.user.demo)return res.json({faculty:DEMO_USERS.faculty,sessions:0,students:0,subjects:[],today:[],openSessions:[]});
+  if(req.user.demo){
+    const d=DEMO_USERS[req.user.sub];
+    if(!d || d.role!=='faculty') return res.status(404).json({error:'Faculty not found'});
+    return res.json({faculty:{...d,password:undefined,faculty_profile:d.faculty_profile||{}},sessions:0,students:Object.values(DEMO_USERS).filter(x=>x.role==='student').length,subjects:[],today:[],openSessions:[]});
+  }
   try {
     const [f,s,c,o]=await Promise.all([
       query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1`,[req.user.sub]),

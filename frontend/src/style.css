@@ -193,3 +193,72 @@ button, input, select { font: inherit; }
   .sis-login-card { padding: 27px 22px 20px; }
   .login-footer { flex-direction: column; }
 }
+
+/* FACULTY DASHBOARD DETAIL */
+
+.faculty-hero {
+  display:flex; justify-content:space-between; align-items:center; gap:24px;
+  padding:25px 28px; background:#fff; border:1px solid #dce4ed; border-radius:7px;
+}
+.faculty-hero-main { display:flex; align-items:center; gap:18px; min-width:0; }
+.faculty-avatar-large {
+  width:72px; height:72px; flex:0 0 72px; display:grid; place-items:center;
+  border-radius:50%; background:#174f86; color:#fff; font-size:27px; font-weight:800;
+}
+.faculty-hero h2 { margin:0; color:#23354b; font-size:25px; font-weight:600; }
+.faculty-hero-main > div:last-child > p:not(.eyebrow) { margin:6px 0 0; color:#718096; font-size:12px; }
+.faculty-meta { display:flex; flex-wrap:wrap; gap:18px; margin-top:14px; }
+.faculty-meta span { display:flex; flex-direction:column; gap:3px; color:#52657a; font-size:11px; }
+.faculty-meta b { color:#8a96a5; font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+.faculty-hero-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.compact { padding:10px 13px; font-size:10px; }
+.faculty-stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-top:15px; }
+.faculty-stat-card {
+  background:#fff; border:1px solid #dce4ed; border-radius:7px; padding:17px;
+}
+.faculty-stat-card span,.faculty-stat-card small { display:block; color:#8390a0; font-size:9px; }
+.faculty-stat-card strong { display:block; margin:8px 0 3px; color:#174f86; font-size:22px; }
+.faculty-stat-card small { font-size:9px; }
+.faculty-dashboard-columns { display:grid; grid-template-columns:1.35fr 1fr; gap:14px; }
+.faculty-panel { margin-top:14px; }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid #edf0f4; padding-bottom:13px; margin-bottom:15px; }
+.panel-heading h3 { margin:0; color:#293b50; font-size:15px; font-weight:600; }
+.text-action { border:0; background:transparent; color:#174f86; font-size:10px; font-weight:700; cursor:pointer; }
+.faculty-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.faculty-action-grid button {
+  display:grid; grid-template-columns:28px 1fr; column-gap:9px; text-align:left;
+  border:1px solid #e0e6ed; background:#fafbfd; border-radius:5px; padding:12px;
+  cursor:pointer; color:#26374d;
+}
+.faculty-action-grid button:hover { border-color:#b9cbe0; background:#f5f9fd; }
+.faculty-action-grid span { grid-row:1 / span 2; color:#8b98a8; font-size:9px; font-weight:800; }
+.faculty-action-grid b { font-size:11px; }
+.faculty-action-grid small { margin-top:3px; color:#8290a0; font-size:9px; line-height:1.4; }
+.profile-summary-list { display:grid; gap:0; }
+.profile-summary-list div {
+  display:flex; justify-content:space-between; gap:15px; padding:10px 0;
+  border-bottom:1px solid #edf0f4; font-size:10px;
+}
+.profile-summary-list div:last-child { border-bottom:0; }
+.profile-summary-list span { color:#8a96a5; }
+.profile-summary-list b { color:#405268; text-align:right; font-weight:600; }
+.workflow-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.workflow-step { position:relative; padding:14px; border:1px solid #e0e6ed; border-radius:5px; background:#fafbfd; }
+.workflow-step.active { border-color:#b8cbe0; background:#f4f8fc; }
+.workflow-step span {
+  width:25px; height:25px; display:grid; place-items:center; margin-bottom:10px;
+  border-radius:50%; background:#e7eff7; color:#174f86; font-size:10px; font-weight:800;
+}
+.workflow-step b { display:block; color:#33465c; font-size:10px; }
+.workflow-step small { display:block; margin-top:5px; color:#8491a1; font-size:9px; line-height:1.45; }
+@media (max-width: 1050px) {
+  .faculty-stat-grid { grid-template-columns:repeat(2,1fr); }
+  .faculty-dashboard-columns { grid-template-columns:1fr; }
+  .workflow-steps { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width: 720px) {
+  .faculty-hero { align-items:flex-start; flex-direction:column; }
+  .faculty-hero-actions { justify-content:flex-start; }
+  .faculty-stat-grid,.faculty-action-grid,.workflow-steps { grid-template-columns:1fr; }
+  .faculty-meta { flex-direction:column; gap:9px; }
+}

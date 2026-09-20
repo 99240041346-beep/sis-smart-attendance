@@ -139,7 +139,8 @@ app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
 
 app.get('/api/admin/teaching-assignments', auth, requireRole('admin'), async (req,res)=>{
   try {
-    if(req.user.demo) return res.json({assignments:[]});
+    // Demo admin authentication is only an identity layer; assignments remain database-backed.
+
     const r=await query(`SELECT o.id AS offering_id,o.semester,o.section,o.academic_year,o.room,o.active,
       u.id AS faculty_id,u.employee_id,u.full_name,
       s.id AS subject_id,s.code,s.name,s.department

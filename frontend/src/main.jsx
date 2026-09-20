@@ -198,17 +198,21 @@ function Profile({ user, onSaved }) {
 }
 
 function AdminFacultyManagement() {
-  const empty = { full_name:'', email:'', department:'', designation:'', phone:'', profile_photo_url:'' };
-  const [faculty,setFaculty]=useState([]),[editing,setEditing]=useState(null),[form,setForm]=useState(empty),[showForm,setShowForm]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+  const empty = { employee_id:'', password:'', full_name:'', email:'', department:'', designation:'', phone:'', profile_photo_url:'' };
+  const [faculty,setFaculty]=useState([]),[editing,setEditing]=useState(null),[form,setForm]=useState(empty),[showForm,setShowForm]=useState(false),[creating,setCreating]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
   useEffect(()=>{api('/admin/faculty').then(d=>setFaculty(d.faculty||[])).catch(e=>setError(e.message));},[]);
-  const edit=f=>{setEditing(f.id);setForm({full_name:f.full_name||f.name||'',email:f.email||'',department:f.department||'',designation:f.designation||'',phone:f.phone||'',profile_photo_url:f.profile_photo_url||''});setShowForm(true);setMessage('');setError('');};
+  const edit=f=>{setEditing(f.id);setCreating(false);setForm({employee_id:f.employee_id||'',password:'',full_name:f.full_name||f.name||'',email:f.email||'',department:f.department||'',designation:f.designation||'',phone:f.phone||'',profile_photo_url:f.profile_photo_url||''});setShowForm(true);setMessage('');setError('');};
+  const openCreate=()=>{setEditing(null);setCreating(true);setForm(empty);setShowForm(true);setMessage('');setError('');};
+  async function create(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{const d=await api('/admin/faculty',{method:'POST',body:JSON.stringify(form)});setFaculty(p=>[...p,d.faculty]);setForm(empty);setShowForm(false);setCreating(false);setMessage('Faculty account created successfully.');}catch(e){setError(e.message)}finally{setBusy(false)}}
   async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{const d=await api('/admin/faculty/'+editing,{method:'PATCH',body:JSON.stringify(form)});setFaculty(p=>p.map(x=>x.id===editing?d.faculty:x));setShowForm(false);setMessage('Faculty details updated successfully.');}catch(e){setError(e.message)}finally{setBusy(false)}}
   return <section className="page-card student-management">
-    <div className="page-heading"><div><p className="eyebrow">ADMINISTRATION • FACULTY</p><h2>Faculty Details</h2><p>Faculty accounts and employment details are controlled by the administrator.</p></div></div>
+    <div className="page-heading"><div><p className="eyebrow">ADMINISTRATION • FACULTY</p><h2>Faculty Accounts</h2><p>One administrator controls and creates all faculty accounts.</p></div><button className="sis-sign-in compact" onClick={openCreate}>+ CREATE FACULTY</button></div>
     {message&&<div className="save-success">{message}</div>}{error&&<div className="login-error">{error}</div>}
-    {showForm&&<form className="student-create-form" onSubmit={save}>
-      <div className="student-form-title"><div><p className="eyebrow">EDIT FACULTY</p><h3>Update faculty details</h3></div><button type="button" className="secondary-btn" onClick={()=>setShowForm(false)}>CANCEL</button></div>
+    {showForm&&<form className="student-create-form" onSubmit={creating?create:save}>
+      <div className="student-form-title"><div><p className="eyebrow">{creating?'CREATE FACULTY':'EDIT FACULTY'}</p><h3>{creating?'Create faculty account':'Update faculty details'}</h3></div><button type="button" className="secondary-btn" onClick={()=>setShowForm(false)}>CANCEL</button></div>
       <div className="student-form-grid">
+        <div className="field"><label>Employee ID</label><input value={form.employee_id} onChange={e=>setForm({...form,employee_id:e.target.value})} disabled={!creating} required={creating}/></div>
+        {creating&&<div className="field"><label>Initial Password</label><input type="password" minLength="4" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required/></div>}
         <div className="field"><label>Full Name</label><input value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} required/></div>
         <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
         <div className="field"><label>Department</label><input value={form.department} onChange={e=>setForm({...form,department:e.target.value})}/></div>
@@ -631,7 +635,7 @@ function Portal({ initialUser, onLogout }) {
   const [facultyStudents, setFacultyStudents] = useState([]);
   const [error, setError] = useState('');
 
-  const studentMenu = ['Dashboard', 'Grievances', 'Semester', 'Arrear Registration', 'Course Registration', 'OE-HSS Registration', 'Grade', 'Seating & Time Table', 'Industrial Training TPO', 'Travel History', 'One Credit', 'Online / InternIT Courses', 'NonCGPA', 'Makeup', 'Fees', 'Exam Papers', 'Course Feedback', 'Profile'];
+  const studentMenu = ['Dashboard', 'Attendance', 'Grievances', 'Semester', 'Arrear Registration', 'Course Registration', 'OE-HSS Registration', 'Grade', 'Seating & Time Table', 'Industrial Training TPO', 'Travel History', 'One Credit', 'Online / InternIT Courses', 'NonCGPA', 'Makeup', 'Fees', 'Exam Papers', 'Course Feedback', 'Profile'];
   const facultyMenu = ['Dashboard', 'Profile', 'My Courses', 'Class Timetable', 'Start Attendance', 'Live Attendance', 'Students', 'Reports'];
   const adminMenu = ['Dashboard', 'Profile', 'Students', 'Faculty', 'Departments', 'Subjects', 'Timetable', 'Reports', 'Audit Logs'];
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;

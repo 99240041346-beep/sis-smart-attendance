@@ -562,10 +562,21 @@ function Portal({ initialUser, onLogout }) {
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;
 
   useEffect(() => {
-    Promise.all([api('/dashboard'), api('/subjects'), user.role === 'faculty' ? api('/faculty/students') : Promise.resolve({ students: [] })])
-      .then(([dashboard, subjectData, studentData]) => { setStats(dashboard); setSubjects(subjectData.subjects || []); setFacultyStudents(studentData.students || []); })
+    const overviewPath = user.role === 'student' ? '/sis/student/overview' : user.role === 'faculty' ? '/sis/faculty/overview' : '/sis/admin/overview';
+    Promise.all([
+      api(overviewPath),
+      api('/subjects').catch(() => ({ subjects: [] })),
+      user.role === 'faculty' ? api('/faculty/students') : Promise.resolve({ students: [] })
+    ])
+      .then(([overview, subjectData, studentData]) => {
+        setStats(user.role === 'student'
+          ? { ...overview, attendance: overview.attendance || { total: 0, present: 0, percentage: 0 } }
+          : overview);
+        setSubjects(subjectData.subjects || []);
+        setFacultyStudents(studentData.students || []);
+      })
       .catch(e => setError(e.message));
-  }, []);
+  }, [user.role]);
 
   function logout() {
     localStorage.removeItem('kare_token');

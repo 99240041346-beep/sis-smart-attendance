@@ -137,6 +137,48 @@ app.get('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
   } catch (_err) { return res.status(503).json({ error: 'Faculty service unavailable' }); }
 });
 
+app.get('/api/admin/teaching-assignments', auth, requireRole('admin'), async (req,res)=>{
+  try {
+    if(req.user.demo) return res.json({assignments:[]});
+    const r=await query(`SELECT o.id AS offering_id,o.semester,o.section,o.academic_year,o.room,o.active,
+      u.id AS faculty_id,u.employee_id,u.full_name,
+      s.id AS subject_id,s.code,s.name,s.department
+      FROM course_offerings o
+      JOIN users u ON u.id=o.faculty_id AND u.role='faculty'
+      JOIN subjects s ON s.id=o.subject_id
+      ORDER BY u.employee_id,o.academic_year DESC,o.semester::int,s.code,o.section`);
+    res.json({assignments:r.rows});
+  } catch(err){ console.error('Teaching assignment list failed:',err.message); res.status(503).json({error:'Teaching assignments unavailable'}); }
+});
+
+app.post('/api/admin/teaching-assignments', auth, requireRole('admin'), async (req,res)=>{
+  try {
+    const {faculty_id,subject_id,semester,section,academic_year,room}=req.body||{};
+    if(!faculty_id||!subject_id||!semester||!section||!academic_year) return res.status(400).json({error:'Faculty, subject, semester, section and academic year are required'});
+    if(!/^[1-8]$/.test(String(semester))) return res.status(400).json({error:'Semester must be 1 to 8'});
+    const f=await query(`SELECT id,employee_id,full_name FROM users WHERE id=$1 AND role='faculty' AND is_active=true`,[faculty_id]);
+    if(!f.rows[0]) return res.status(404).json({error:'Faculty not found'});
+    const sub=await query(`SELECT id,code,name,department FROM subjects WHERE id=$1`,[subject_id]);
+    if(!sub.rows[0]) return res.status(404).json({error:'Subject not found'});
+    const existing=await query(`SELECT id FROM course_offerings WHERE subject_id=$1 AND faculty_id=$2 AND semester=$3 AND section=$4 AND academic_year=$5 LIMIT 1`,[subject_id,faculty_id,String(semester),String(section).trim(),String(academic_year).trim()]);
+    if(existing.rows[0]){
+      const r=await query(`UPDATE course_offerings SET active=true,room=$1 WHERE id=$2 RETURNING id`,[room||null,existing.rows[0].id]);
+      return res.json({assignment:{offering_id:r.rows[0].id,message:'Existing teaching assignment reactivated'}});
+    }
+    const r=await query(`INSERT INTO course_offerings(subject_id,faculty_id,semester,section,academic_year,room,active) VALUES($1,$2,$3,$4,$5,$6,true) RETURNING id`,[subject_id,faculty_id,String(semester),String(section).trim(),String(academic_year).trim(),room||null]);
+    res.status(201).json({assignment:{offering_id:r.rows[0].id,message:'Teaching assignment created'}});
+  } catch(err){ console.error('Teaching assignment create failed:',err.code||err.message); if(err.code==='23505') return res.status(409).json({error:'This faculty-subject-semester-section-year assignment already exists'}); res.status(503).json({error:'Unable to create teaching assignment'}); }
+});
+
+app.patch('/api/admin/teaching-assignments/:id', auth, requireRole('admin'), async (req,res)=>{
+  try {
+    const {active,room}=req.body||{};
+    const r=await query(`UPDATE course_offerings SET active=COALESCE($1,active),room=COALESCE($2,room) WHERE id=$3 RETURNING id,active,room`,[typeof active==='boolean'?active:null,room??null,req.params.id]);
+    if(!r.rows[0]) return res.status(404).json({error:'Teaching assignment not found'});
+    res.json({assignment:r.rows[0]});
+  } catch(err){ console.error('Teaching assignment update failed:',err.message); res.status(503).json({error:'Unable to update teaching assignment'}); }
+});
+
 app.post('/api/admin/faculty', auth, requireRole('admin'), async (req, res) => {
   try {
     const {

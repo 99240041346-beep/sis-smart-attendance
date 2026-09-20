@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS attendance_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   faculty_id UUID NOT NULL REFERENCES users(id),
   subject_id UUID NOT NULL REFERENCES subjects(id),
-  offering_id UUID REFERENCES course_offerings(id) ON DELETE SET NULL,
+  offering_id UUID,
   semester VARCHAR(30),
   academic_year VARCHAR(20),
   section VARCHAR(20),
@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS attendance_security_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS offering_id UUID REFERENCES course_offerings(id) ON DELETE SET NULL;
+ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS offering_id UUID;
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS semester VARCHAR(30);
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20);
 ALTER TABLE attendance_sessions ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,7);

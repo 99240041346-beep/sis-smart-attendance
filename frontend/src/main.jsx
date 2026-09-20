@@ -724,7 +724,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'admin' && page === 'Audit Logs') return <AdminAuditPage />;
     if (user.role === 'admin' && page === 'Reports') return <AdminReportPage />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
-    if (user.role === 'faculty' && page === 'Start Attendance') return <QRGenerator subjects={subjects} />;
+    if (user.role === 'faculty' && page === 'Start Attendance') return <FacultyAttendancePage subjects={subjects} />;
     if (user.role === 'faculty' && page === 'Live Attendance') return <FacultyLivePage stats={stats} />;
     if (user.role === 'faculty' && (page === 'My Courses' || page === 'Class Timetable')) return <FacultyClassesPage />;
     if (user.role === 'faculty' && page === 'Reports') return <FacultyReportsPage />;

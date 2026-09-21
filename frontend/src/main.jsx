@@ -16,7 +16,7 @@ const ROLE_CONFIG = {
 };
 
 async function api(path, options = {}) {
-  const token = localStorage.getItem('kare_token') || sessionStorage.getItem('kare_token');
+  const token = sessionStorage.getItem('kare_token') || localStorage.getItem('kare_token');
   const request = async () => {
     const response = await fetch(API + path, {
       ...options,
@@ -62,9 +62,13 @@ function Login({ onLogin }) {
       if (remember) {
         localStorage.setItem('kare_token', data.token);
         localStorage.setItem('kare_user', JSON.stringify(data.user));
+        sessionStorage.removeItem('kare_token');
+        sessionStorage.removeItem('kare_user');
       } else {
         sessionStorage.setItem('kare_token', data.token);
         sessionStorage.setItem('kare_user', JSON.stringify(data.user));
+        localStorage.removeItem('kare_token');
+        localStorage.removeItem('kare_user');
       }
       onLogin(data.user);
     } catch (err) {

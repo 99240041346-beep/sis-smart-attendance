@@ -486,13 +486,12 @@ app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,re
       if(!demo || demo.role!=='faculty') return res.status(404).json({error:'Faculty not found'});
       facultyId=demo.employee_id;
     }
-    const userResult=await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url
-      FROM users
-      WHERE (id=$1::uuid OR employee_id=$2) AND role='faculty' AND is_active=true
-      LIMIT 1`,[
-      /^[0-9a-fA-F-]{36}$/.test(facultyId)?facultyId:'00000000-0000-0000-0000-000000000000',
-      facultyId
-    ]);
+    const isUuid=/^[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(facultyId);
+    const userResult=isUuid
+      ? await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url
+          FROM users WHERE id=$1::uuid AND role='faculty' AND is_active=true LIMIT 1`,[facultyId])
+      : await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url
+          FROM users WHERE employee_id=$1 AND role='faculty' AND is_active=true LIMIT 1`,[facultyId]);
     if(!userResult.rows[0]) return res.status(404).json({error:'Faculty account is not available in the database'});
     const faculty=userResult.rows[0];
     const [studentResult, offeringResult, sessionResult]=await Promise.all([

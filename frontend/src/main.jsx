@@ -16,8 +16,9 @@ const ROLE_CONFIG = {
 };
 
 async function api(path, options = {}) {
-  const token = sessionStorage.getItem('kare_token') || localStorage.getItem('kare_token');
+  const getToken = () => sessionStorage.getItem('kare_token') || localStorage.getItem('kare_token');
   const request = async () => {
+    const token = getToken();
     const response = await fetch(API + path, {
       ...options,
       headers: {
@@ -27,11 +28,20 @@ async function api(path, options = {}) {
       }
     });
     const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      localStorage.removeItem('kare_token');
+      localStorage.removeItem('kare_user');
+      sessionStorage.removeItem('kare_token');
+      sessionStorage.removeItem('kare_user');
+      window.dispatchEvent(new Event('kare-auth-expired'));
+      throw new Error(data.error || 'Session expired. Please sign in again.');
+    }
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
     return data;
   };
   try { return await request(); }
   catch (err) {
+    if (err.message === 'Invalid or expired token' || err.message === 'Authentication required' || err.message === 'Session expired. Please sign in again.') throw err;
     if (err instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(err.message)) {
       await new Promise(resolve => setTimeout(resolve, 1200));
       try { return await request(); } catch (_retryErr) {}
@@ -59,16 +69,16 @@ function Login({ onLogin }) {
         method: 'POST',
         body: JSON.stringify({ identifier: identifier.trim(), password, role })
       });
+      localStorage.removeItem('kare_token');
+      localStorage.removeItem('kare_user');
+      sessionStorage.removeItem('kare_token');
+      sessionStorage.removeItem('kare_user');
       if (remember) {
         localStorage.setItem('kare_token', data.token);
         localStorage.setItem('kare_user', JSON.stringify(data.user));
-        sessionStorage.removeItem('kare_token');
-        sessionStorage.removeItem('kare_user');
       } else {
         sessionStorage.setItem('kare_token', data.token);
         sessionStorage.setItem('kare_user', JSON.stringify(data.user));
-        localStorage.removeItem('kare_token');
-        localStorage.removeItem('kare_user');
       }
       onLogin(data.user);
     } catch (err) {
@@ -844,6 +854,8 @@ function Portal({ initialUser, onLogout }) {
   const menu = user.role === 'student' ? studentMenu : user.role === 'faculty' ? facultyMenu : adminMenu;
 
   useEffect(() => {
+    const expire = () => onLogout();
+    window.addEventListener('kare-auth-expired', expire);
     const overviewPath = user.role === 'student' ? '/sis/student/overview' : user.role === 'faculty' ? '/sis/faculty/overview' : '/sis/admin/overview';
     Promise.all([
       api(overviewPath),
@@ -857,17 +869,22 @@ function Portal({ initialUser, onLogout }) {
         if (user.role === 'student' && overview.student) {
           const merged = { ...user, ...overview.student, name: overview.student.full_name || user.name };
           setUser(merged);
-          localStorage.setItem('kare_user', JSON.stringify(merged));
+          const storage = sessionStorage.getItem('kare_token') ? sessionStorage : localStorage;
+          storage.setItem('kare_user', JSON.stringify(merged));
         }
         if (user.role === 'faculty' && overview.faculty) {
           const merged = { ...user, ...overview.faculty, name: overview.faculty.full_name || user.name };
           setUser(merged);
-          localStorage.setItem('kare_user', JSON.stringify(merged));
+          const storage = sessionStorage.getItem('kare_token') ? sessionStorage : localStorage;
+          storage.setItem('kare_user', JSON.stringify(merged));
         }
-        setSubjects(user.role === 'faculty' && Array.isArray(overview.subjects) && overview.subjects.length ? overview.subjects : (subjectData.subjects || []));
+        setSubjects(user.role === 'faculty'
+          ? (Array.isArray(overview.subjects) ? overview.subjects : [])
+          : (subjectData.subjects || []));
         setFacultyStudents(studentData.students || []);
       })
       .catch(e => setError(e.message));
+    return () => window.removeEventListener('kare-auth-expired', expire);
   }, [user.role]);
 
   function logout() {

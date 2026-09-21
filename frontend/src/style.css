@@ -451,3 +451,31 @@ button, input, select { font: inherit; }
 .semester-choice.active{background:#0f172a;color:#fff;border-color:#0f172a}
 .selected-academic-context{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 14px;margin:10px 0;border-radius:8px;background:#f1f5f9;color:#334155}
 @media(max-width:760px){.semester-selector-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.semester-selector-title{align-items:flex-start;flex-direction:column}}
+
+
+/* Sequential faculty attendance workflow */
+.attendance-flow{display:grid;gap:14px;margin:18px 0}
+.attendance-flow-step{border:1px solid #d8e0ea;border-radius:10px;padding:16px;background:#fff;display:grid;grid-template-columns:42px minmax(180px,1fr) minmax(260px,1.6fr);gap:14px;align-items:start}
+.attendance-flow-step>span:first-child{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e9eef5;font-weight:800;color:#41556d}
+.attendance-flow-step.active>span:first-child,.attendance-flow-step.done>span:first-child{background:#1d4f91;color:#fff}
+.attendance-flow-step.disabled{opacity:.55;background:#f7f9fb}
+.attendance-flow-step>div:nth-child(2){display:flex;flex-direction:column;gap:4px}
+.attendance-flow-step>div:nth-child(2) b{font-size:14px;color:#19324d}
+.attendance-flow-step>div:nth-child(2) small{color:#718096}
+.attendance-flow-step select{width:100%;min-height:42px}
+.attendance-student-picker{grid-column:2 / -1;border-top:1px solid #e4e9ef;padding-top:12px}
+.attendance-picker-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.attendance-student-list{max-height:220px;overflow:auto;border:1px solid #e3e8ee;border-radius:8px;background:#fbfcfe}
+.attendance-student-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #edf1f5;cursor:pointer}
+.attendance-student-row:last-child{border-bottom:0}
+.attendance-student-row input{width:16px;height:16px}
+.attendance-student-row>span:last-child{display:flex;flex-direction:column;gap:2px}
+.attendance-student-row small{color:#718096}
+.attendance-step-placeholder{grid-column:2 / -1;padding:12px;border:1px dashed #ccd6e2;border-radius:8px;color:#718096;background:#f8fafc}
+.attendance-range-grid{grid-column:2 / -1;display:grid;grid-template-columns:repeat(4,minmax(80px,1fr)) minmax(90px,1fr);gap:8px}
+.range-choice{min-height:42px;border:1px solid #cfd8e3;border-radius:7px;background:#fff;font-weight:700;cursor:pointer}
+.range-choice.active{background:#1d4f91;color:#fff;border-color:#1d4f91}
+.range-choice:disabled{cursor:not-allowed}
+.attendance-extra-grid{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:14px;margin:14px 0}
+.attendance-extra-grid input:disabled,.attendance-extra-grid button:disabled{opacity:.55}
+@media(max-width:800px){.attendance-flow-step{grid-template-columns:36px 1fr}.attendance-flow-step>select,.attendance-flow-step>.attendance-student-picker,.attendance-flow-step>.attendance-range-grid{grid-column:2}.attendance-range-grid{grid-template-columns:repeat(2,1fr)}.attendance-extra-grid{grid-template-columns:1fr}}

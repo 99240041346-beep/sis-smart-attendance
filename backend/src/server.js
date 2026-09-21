@@ -478,30 +478,43 @@ app.post('/api/sis/student/leaves', auth, requireRole('student'), async (req,res
 
 /* Faculty SIS APIs */
 app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,res)=>{
-  if(req.user.demo){
-    const d=DEMO_USERS[req.user.sub];
-    if(!d || d.role!=='faculty') return res.status(404).json({error:'Faculty not found'});
-    return res.json({faculty:{...d,password:undefined,faculty_profile:d.faculty_profile||{}},sessions:0,students:Object.values(DEMO_USERS).filter(x=>x.role==='student').length,subjects:[],today:[],openSessions:[]});
-  }
   try {
-    const userResult=await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url FROM users WHERE id=$1 AND role='faculty' AND is_active=true`,[req.user.sub]);
-    if(!userResult.rows[0]) return res.status(404).json({error:'Faculty not found'});
+    // Resolve both real UUID sessions and demo faculty IDs (FAC001...FAC005).
+    let facultyId=String(req.user.sub);
+    if(req.user.demo){
+      const demo=DEMO_USERS[req.user.sub];
+      if(!demo || demo.role!=='faculty') return res.status(404).json({error:'Faculty not found'});
+      facultyId=demo.employee_id;
+    }
+    const userResult=await query(`SELECT id,employee_id,full_name,email,department,designation,phone,profile_photo_url
+      FROM users
+      WHERE (id=$1::uuid OR employee_id=$2) AND role='faculty' AND is_active=true
+      LIMIT 1`,[
+      /^[0-9a-fA-F-]{36}$/.test(facultyId)?facultyId:'00000000-0000-0000-0000-000000000000',
+      facultyId
+    ]);
+    if(!userResult.rows[0]) return res.status(404).json({error:'Faculty account is not available in the database'});
     const faculty=userResult.rows[0];
     const [studentResult, offeringResult, sessionResult]=await Promise.all([
       query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[faculty.department||null]),
       query(`SELECT DISTINCT o.id AS offering_id,s.id,s.code,s.name,s.department,o.semester,o.section,o.academic_year,o.room
         FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
         WHERE o.faculty_id=$1 AND o.active=true
-        ORDER BY o.semester::int,s.code,o.section`,[req.user.sub]),
-      query(`SELECT id,subject_id,section,room,status,started_at,qr_expires_at FROM attendance_sessions WHERE faculty_id=$1 AND status='open' ORDER BY started_at DESC`,[req.user.sub])
+        ORDER BY o.semester::int,s.code,o.section`,[faculty.id]),
+      query(`SELECT id,subject_id,section,room,status,started_at,qr_expires_at
+        FROM attendance_sessions WHERE faculty_id=$1 AND status='open' ORDER BY started_at DESC`,[faculty.id])
     ]);
-    return res.json({faculty,students:studentResult.rows[0]?.count||0,subjects:offeringResult.rows,openSessions:sessionResult.rows});
+    return res.json({
+      faculty,
+      students:studentResult.rows[0]?.count||0,
+      subjects:offeringResult.rows,
+      openSessions:sessionResult.rows
+    });
   } catch(err) {
     console.error('Faculty SIS overview failed:',err.code||err.message);
-    return res.status(503).json({error:'Faculty SIS unavailable',detail:process.env.NODE_ENV==='development'?(err.code||err.message):undefined});
+    return res.status(503).json({error:'Faculty SIS unavailable'});
   }
 });
-
 app.get('/api/sis/faculty/classes', auth, requireRole('faculty'), async (req,res)=>listRows(res,`SELECT o.id,o.section,o.semester,o.academic_year,o.room,s.id subject_id,s.code,s.name,t.day_of_week,t.start_time,t.end_time FROM course_offerings o JOIN subjects s ON s.id=o.subject_id LEFT JOIN timetables t ON t.offering_id=o.id WHERE o.faculty_id=$1 AND o.active=true ORDER BY t.day_of_week,t.start_time`,[req.user.sub],'classes'));
 
 app.get('/api/sis/faculty/reports/attendance', auth, requireRole('faculty','admin'), async (req,res)=>listRows(res,`SELECT s.id session_id,s.started_at,s.section,s.room,sub.code,sub.name,COUNT(a.id)::int present_count FROM attendance_sessions s JOIN subjects sub ON sub.id=s.subject_id LEFT JOIN attendance_records a ON a.session_id=s.id WHERE s.faculty_id=$1 GROUP BY s.id,sub.code,sub.name ORDER BY s.started_at DESC LIMIT 200`,[req.user.sub],'reports'));

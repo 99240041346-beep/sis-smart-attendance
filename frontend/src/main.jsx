@@ -600,63 +600,180 @@ function QRGenerator({ subjects }) {
   );
 }
 
-function FacultyAttendancePage({ subjects=[] }) {
-  const [form,setForm]=useState({offering_id:'',section:'',room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
-  const [session,setSession]=useState(null),[qr,setQr]=useState(''),[qrImage,setQrImage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[semester,setSemester]=useState('');
-  const offerings=Array.isArray(subjects)?subjects:[];
-  const semesters=[...new Set(offerings.map(s=>String(s.semester||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
-  const filteredOfferings=offerings.filter(s=>!semester||String(s.semester)===semester);
-  const selected=offerings.find(s=>String(s.offering_id||s.id)===String(form.offering_id));
+function FacultyAttendancePage({ subjects=[], students=[] }) {
+  const [section,setSection]=useState('');
+  const [offeringId,setOfferingId]=useState('');
+  const [selectedStudentIds,setSelectedStudentIds]=useState([]);
+  const [form,setForm]=useState({room:'',latitude:'',longitude:'',allowed_radius_meters:'100',qr_expires_minutes:'5'});
+  const [session,setSession]=useState(null),[qrImage,setQrImage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
 
-  function chooseOffering(id){
-    const item=offerings.find(s=>String(s.offering_id||s.id)===String(id));
-    setForm(x=>({...x,offering_id:id,section:item?.section||'',room:item?.room||''}));
+  const offerings=Array.isArray(subjects)?subjects:[];
+  const allStudents=Array.isArray(students)?students:[];
+  const sections=[...new Set(offerings.map(s=>String(s.section||'').trim()).filter(Boolean))].sort();
+  const sectionOfferings=offerings.filter(s=>String(s.section||'').trim().toLowerCase()===section.trim().toLowerCase());
+  const selected=sectionOfferings.find(s=>String(s.offering_id||s.id)===String(offeringId));
+  const sectionStudents=allStudents.filter(s=>String(s.section||'').trim().toLowerCase()===section.trim().toLowerCase());
+
+  useEffect(()=>{
+    setSelectedStudentIds(sectionStudents.map(s=>s.id).filter(Boolean));
+  },[section]);
+
+  function chooseSection(value){
+    setSection(value);
+    setOfferingId('');
+    setForm(x=>({...x,room:''}));
   }
+
+  function chooseOffering(value){
+    const item=sectionOfferings.find(s=>String(s.offering_id||s.id)===String(value));
+    setOfferingId(value);
+    setForm(x=>({...x,room:item?.room||''}));
+  }
+
+  function toggleStudent(id){
+    setSelectedStudentIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  }
+
+  function toggleAllStudents(){
+    const ids=sectionStudents.map(s=>s.id).filter(Boolean);
+    setSelectedStudentIds(prev=>prev.length===ids.length?[]:ids);
+  }
+
   async function useLocation(){
     setError('');
     if(!navigator.geolocation)return setError('Geolocation is not supported by this browser.');
-    navigator.geolocation.getCurrentPosition(p=>setForm(x=>({...x,latitude:p.coords.latitude.toFixed(7),longitude:p.coords.longitude.toFixed(7)})),e=>setError(e.message),{enableHighAccuracy:true,timeout:10000});
+    navigator.geolocation.getCurrentPosition(
+      p=>setForm(x=>({...x,latitude:p.coords.latitude.toFixed(7),longitude:p.coords.longitude.toFixed(7)})),
+      e=>setError(e.message),
+      {enableHighAccuracy:true,timeout:10000}
+    );
   }
+
   async function start(){
     setBusy(true);setError('');
     try{
-      if(!selected)throw new Error('Select one of your assigned semester course offerings.');
-      const d=await api('/sis/faculty/attendance/sessions',{method:'POST',body:JSON.stringify({
-        subjectId:form.offering_id,
-        section:form.section,
-        room:form.room,
-        allowed_radius_meters:Number(form.allowed_radius_meters),
-        qr_expires_minutes:Number(form.qr_expires_minutes)
-      })});
-      setSession(d.session);setQr(d.qrToken||d.session.qr_token||'');setQrImage(await QRCode.toDataURL(d.qrToken||d.session.qr_token||'',{width:240,margin:2}));
+      if(!section)throw new Error('Select a section first.');
+      if(!selected)throw new Error('Select a subject for the selected section.');
+      if(!sectionStudents.length)throw new Error('No students are assigned to this section yet.');
+      if(!selectedStudentIds.length)throw new Error('Select at least one student.');
+      const d=await api('/sis/faculty/attendance/sessions',{
+        method:'POST',
+        body:JSON.stringify({
+          subjectId:offeringId,
+          section,
+          room:form.room,
+          latitude:form.latitude,
+          longitude:form.longitude,
+          allowed_radius_meters:Number(form.allowed_radius_meters),
+          qr_expires_minutes:Number(form.qr_expires_minutes)
+        })
+      });
+      setSession(d.session);
+      const token=d.qrToken||d.session.qr_token||'';
+      setQrImage(await QRCode.toDataURL(token,{width:240,margin:2}));
     }catch(e){setError(e.message)}finally{setBusy(false)}
   }
+
   async function close(){
     if(!session)return;
-    try{await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});setSession(null);setQr('');setQrImage('');}catch(e){setError(e.message)}
+    try{
+      await api('/attendance/sessions/'+session.id+'/close',{method:'POST'});
+      setSession(null);setQrImage('');
+    }catch(e){setError(e.message)}
   }
+
   return <section className="page-card data-workspace">
-    <div className="page-heading"><div><p className="eyebrow">FACULTY • ATTENDANCE</p><h2>Start Controlled Attendance</h2><p>Choose the semester and exact course offering. Attendance is permanently tied to the selected semester, section and academic year.</p></div><span className="status-pill">{session?'LIVE':'READY'}</span></div>
-    {error&&<div className="login-error">{error}</div>}
-    {!session?<>
-      <div className="master-data-banner"><strong>Faculty workload</strong><span>Semester → Subject → Section → Academic Year</span><small>Changing semester only changes the visible assignments. Previous attendance is never deleted.</small></div>
-      <div className="attendance-start-grid">
-        <div className="field"><label>Semester</label><select value={semester} onChange={e=>{setSemester(e.target.value);setForm(x=>({...x,offering_id:'',section:'',room:''}))}}><option value="">All assigned semesters</option>{semesters.map(n=><option key={n} value={n}>Semester {n}</option>)}</select></div>
-        <div className="field"><label>Assigned Subject / Section</label><select value={form.offering_id} onChange={e=>chooseOffering(e.target.value)}><option value="">Select assigned course</option>{filteredOfferings.map(s=><option key={s.offering_id||s.id} value={s.offering_id||s.id}>{s.code} — {s.name} • Sem {s.semester} • {s.section||'All'} • {s.academic_year||'Current'}</option>)}</select></div>
-        <div className="field"><label>Section</label><input value={form.section} readOnly placeholder="Auto from assignment"/></div>
-        <div className="field"><label>Academic Year</label><input value={selected?.academic_year||''} readOnly placeholder="Auto from assignment"/></div>
-        <div className="field"><label>Room</label><input value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Block / Room"/></div>
-        <div className="field"><label>Allowed radius (meters)</label><input type="number" min="10" value={form.allowed_radius_meters} onChange={e=>setForm({...form,allowed_radius_meters:e.target.value})}/></div>
-        <div className="field"><label>QR validity (minutes)</label><input type="number" min="1" max="30" value={form.qr_expires_minutes} onChange={e=>setForm({...form,qr_expires_minutes:e.target.value})}/></div>
-        <div className="field"><label>Latitude</label><input value={form.latitude} onChange={e=>setForm({...form,latitude:e.target.value})} placeholder="Faculty location"/></div>
-        <div className="field"><label>Longitude</label><input value={form.longitude} onChange={e=>setForm({...form,longitude:e.target.value})} placeholder="Faculty location"/></div>
-        <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
+    <div className="page-heading">
+      <div>
+        <p className="eyebrow">FACULTY • ATTENDANCE</p>
+        <h2>Start Controlled Attendance</h2>
+        <p>Select in one clear order: <b>Section → Subject → Students → Attendance Range</b>.</p>
       </div>
-      <div className="form-actions"><button className="sis-sign-in compact" disabled={busy||!selected} onClick={start}>{busy?'STARTING...':'START ATTENDANCE'}</button></div>
-    </>:<div className="attendance-live-panel">
-      <div><span className="live-dot">LIVE</span><h3>{session.subject_code||'Attendance Session'}</h3><p>Semester <b>{session.semester||'—'}</b> • Section <b>{session.section||'All'}</b> • Academic Year <b>{session.academic_year||'—'}</b> • Radius <b>{session.allowed_radius_meters} m</b></p><p>Room <b>{session.room||'Not set'}</b> • Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p></div>
+      <span className="status-pill">{session?'LIVE':'STEP-BY-STEP'}</span>
+    </div>
+
+    {error&&<div className="login-error">{error}</div>}
+
+    {!session ? <>
+      <div className="master-data-banner">
+        <strong>Attendance setup</strong>
+        <span>1. Section → 2. Subject → 3. Students → 4. Range</span>
+        <small>Each step unlocks the next step. The selected course offering still controls the semester and academic year.</small>
+      </div>
+
+      <div className="attendance-flow">
+        <div className={section?'attendance-flow-step done':'attendance-flow-step active'}>
+          <span>1</span>
+          <div><b>Select Section</b><small>Choose the class section first.</small></div>
+          <select value={section} onChange={e=>chooseSection(e.target.value)}>
+            <option value="">Select section</option>
+            {sections.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <div className={section?'attendance-flow-step active':'attendance-flow-step disabled'}>
+          <span>2</span>
+          <div><b>Select Subject</b><small>{section?'Subjects assigned to '+section:'Select a section first.'}</small></div>
+          <select value={offeringId} disabled={!section} onChange={e=>chooseOffering(e.target.value)}>
+            <option value="">Select subject</option>
+            {sectionOfferings.map(s=><option key={s.offering_id||s.id} value={s.offering_id||s.id}>{s.code} — {s.name}</option>)}
+          </select>
+        </div>
+
+        <div className={selected?'attendance-flow-step active':'attendance-flow-step disabled'}>
+          <span>3</span>
+          <div><b>Select Students</b><small>{selected?sectionStudents.length+' student(s) in '+section:'Select a subject first.'}</small></div>
+          {selected ? <div className="attendance-student-picker">
+            <div className="attendance-picker-head">
+              <strong>{selectedStudentIds.length} / {sectionStudents.length} selected</strong>
+              <button type="button" className="text-action" onClick={toggleAllStudents}>{selectedStudentIds.length===sectionStudents.length?'Clear all':'Select all'}</button>
+            </div>
+            <div className="attendance-student-list">
+              {sectionStudents.map(st=><label key={st.id} className="attendance-student-row">
+                <input type="checkbox" checked={selectedStudentIds.includes(st.id)} onChange={()=>toggleStudent(st.id)}/>
+                <span className="student-mini-photo">{st.profile_photo_url?<img src={st.profile_photo_url} alt=""/>:(st.full_name||'S').charAt(0)}</span>
+                <span><b>{st.full_name||st.name||'Student'}</b><small>{st.register_no||'—'} • {st.section||section}</small></span>
+              </label>)}
+              {!sectionStudents.length&&<div className="empty-table">No students found for this section.</div>}
+            </div>
+          </div> : <div className="attendance-step-placeholder">Students appear after subject selection.</div>}
+        </div>
+
+        <div className={selected&&selectedStudentIds.length?'attendance-flow-step active':'attendance-flow-step disabled'}>
+          <span>4</span>
+          <div><b>Attendance Range</b><small>{selectedStudentIds.length?'Set the allowed GPS radius for this session.':'Select students first.'}</small></div>
+          <div className="attendance-range-grid">
+            {[50,100,200,500].map(n=><button type="button" key={n} className={String(form.allowed_radius_meters)===String(n)?'range-choice active':'range-choice'} disabled={!selectedStudentIds.length} onClick={()=>setForm(x=>({...x,allowed_radius_meters:String(n)}))}>{n} m</button>)}
+            <input type="number" min="10" max="5000" value={form.allowed_radius_meters} disabled={!selectedStudentIds.length} onChange={e=>setForm(x=>({...x,allowed_radius_meters:e.target.value}))}/>
+          </div>
+        </div>
+      </div>
+
+      <div className="attendance-extra-grid">
+        <div className="field"><label>Room</label><input value={form.room} disabled={!selected} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Block / Room"/></div>
+        <div className="field"><label>QR validity (minutes)</label><input type="number" min="1" max="30" value={form.qr_expires_minutes} disabled={!selectedStudentIds.length} onChange={e=>setForm({...form,qr_expires_minutes:e.target.value})}/></div>
+        <div className="field"><label>Latitude</label><input value={form.latitude} disabled={!selectedStudentIds.length} onChange={e=>setForm({...form,latitude:e.target.value})} placeholder="Faculty location"/></div>
+        <div className="field"><label>Longitude</label><input value={form.longitude} disabled={!selectedStudentIds.length} onChange={e=>setForm({...form,longitude:e.target.value})} placeholder="Faculty location"/></div>
+        <div className="field location-action"><label>Location</label><button type="button" className="secondary-btn" disabled={!selectedStudentIds.length} onClick={useLocation}>USE MY CURRENT LOCATION</button></div>
+      </div>
+
+      <div className="selected-academic-context">
+        <b>{section||'No section'}</b><span>•</span><strong>{selected?.code||'No subject'}</strong><span>•</span><span>{selected?.name||'Select subject'}</span><span>•</span><span>Sem {selected?.semester||'—'} • {selected?.academic_year||'—'}</span>
+      </div>
+
+      <div className="form-actions">
+        <button className="sis-sign-in compact" disabled={busy||!selected||!selectedStudentIds.length} onClick={start}>{busy?'STARTING...':'START ATTENDANCE'}</button>
+      </div>
+    </> : <div className="attendance-live-panel">
+      <div>
+        <span className="live-dot">LIVE</span>
+        <h3>{session.subject_code||'Attendance Session'}</h3>
+        <p>Section <b>{session.section||section}</b> • Semester <b>{session.semester||selected?.semester||'—'}</b> • Academic Year <b>{session.academic_year||selected?.academic_year||'—'}</b></p>
+        <p>Students <b>{selectedStudentIds.length}</b> • Radius <b>{session.allowed_radius_meters||form.allowed_radius_meters} m</b> • Room <b>{session.room||form.room||'Not set'}</b></p>
+        <p>Expires <b>{session.qr_expires_at?new Date(session.qr_expires_at).toLocaleTimeString('en-IN'):'—'}</b></p>
+      </div>
       <div className="attendance-qr">{qrImage?<img src={qrImage} alt="Attendance QR"/>:<b>QR unavailable</b>}</div>
-      <p className="qr-token-note">Students must belong to the session section. The server validates the exact course offering, semester, section, expiry, location and device security.</p>
+      <p className="qr-token-note">Students must belong to the selected section. The server validates the exact course offering, section, expiry, location and device security.</p>
       <button className="secondary-btn" onClick={close}>CLOSE ATTENDANCE</button>
     </div>}
   </section>;
@@ -908,7 +1025,7 @@ function Portal({ initialUser, onLogout }) {
     if (user.role === 'admin' && page === 'Audit Logs') return <AdminAuditPage />;
     if (user.role === 'admin' && page === 'Reports') return <AdminReportPage />;
     if (user.role === 'student' && page === 'Attendance') return <StudentScanner />;
-    if (user.role === 'faculty' && page === 'Start Attendance') return <FacultyAttendancePage subjects={subjects} />;
+    if (user.role === 'faculty' && page === 'Start Attendance') return <FacultyAttendancePage subjects={subjects} students={facultyStudents} />;
     if (user.role === 'faculty' && page === 'Live Attendance') return <FacultyLivePage />;
     if (user.role === 'faculty' && (page === 'My Courses' || page === 'Class Timetable')) return <FacultyClassesPage />;
     if (user.role === 'faculty' && page === 'Reports') return <FacultyReportsPage />;

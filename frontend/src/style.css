@@ -479,3 +479,10 @@ button, input, select { font: inherit; }
 .attendance-extra-grid{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:14px;margin:14px 0}
 .attendance-extra-grid input:disabled,.attendance-extra-grid button:disabled{opacity:.55}
 @media(max-width:800px){.attendance-flow-step{grid-template-columns:36px 1fr}.attendance-flow-step>select,.attendance-flow-step>.attendance-student-picker,.attendance-flow-step>.attendance-range-grid{grid-column:2}.attendance-range-grid{grid-template-columns:repeat(2,1fr)}.attendance-extra-grid{grid-template-columns:1fr}}
+
+/* Clean faculty attendance process */
+.attendance-settings-card{margin-top:16px;padding:18px;border:1px solid #dce4ec;border-radius:12px;background:#fff}
+.attendance-student-summary{display:flex;flex-direction:column;gap:5px;margin-top:14px;padding:13px 15px;border-radius:8px;background:#f5f8fb;border:1px solid #e1e8ef}
+.attendance-student-summary b{color:#19324d}.attendance-student-summary span{font-weight:600;color:#334e68}.attendance-student-summary small{color:#718096}
+.attendance-live-info{display:flex;flex-direction:column;gap:7px}.attendance-live-info h3{margin:7px 0 2px}.attendance-live-info p{margin:0;color:#53657a}
+.attendance-live-instructions{display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:12px;border-radius:8px;background:#f5f8fb;border:1px solid #dce5ee}.attendance-live-instructions span{color:#66788a;font-size:13px}

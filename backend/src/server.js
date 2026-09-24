@@ -507,7 +507,7 @@ app.get('/api/sis/faculty/overview', auth, requireRole('faculty'), async (req,re
     const faculty=userResult.rows[0];
     const [studentResult, offeringResult, sessionResult]=await Promise.all([
       query(`SELECT COUNT(*)::int count FROM users WHERE role='student' AND is_active=true AND (department=$1 OR $1 IS NULL)`,[faculty.department||null]),
-      query(`SELECT DISTINCT o.id AS offering_id,s.id,s.code,s.name,s.department,o.semester,o.section,o.academic_year,o.room
+      query(`SELECT o.id AS offering_id,s.id,s.code,s.name,s.department,o.semester,o.section,o.academic_year,o.room
         FROM course_offerings o JOIN subjects s ON s.id=o.subject_id
         WHERE o.faculty_id=$1 AND o.active=true
         ORDER BY o.semester::int,s.code,o.section`,[faculty.id]),
